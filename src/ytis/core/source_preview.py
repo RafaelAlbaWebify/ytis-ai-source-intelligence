@@ -6,6 +6,7 @@ import mimetypes
 import re
 import subprocess
 import sys
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -33,12 +34,49 @@ def safe_project_name(name: str) -> str:
     return cleaned[:80] or "YTIS_Source"
 
 
+def expected_research_project_dir(projects_dir: Path, project_name: str) -> Path:
+    safe = safe_project_name(project_name)
+    ready_dir = projects_dir / f"{safe}_YTIS_RESEARCH_READY"
+    if ready_dir.exists():
+        return ready_dir
+    plain_dir = projects_dir / safe
+    if plain_dir.exists():
+        return plain_dir
+    return ready_dir
+
+
 def image_to_data_uri(path: Path) -> str:
     if not path.exists():
         return ""
     mime = mimetypes.guess_type(str(path))[0] or "image/jpeg"
     encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{encoded}"
+
+
+def existing_preview(project_dir: Path, url: str, project_name: str) -> SourcePreview | None:
+    preview_dir = project_dir / "source_preview"
+    image_path = preview_dir / "source_preview.jpg"
+    meta_path = preview_dir / "source_preview_metadata.json"
+    if not image_path.exists():
+        return None
+
+    metadata: dict[str, Any] = {}
+    if meta_path.exists():
+        try:
+            metadata = json.loads(meta_path.read_text(encoding="utf-8-sig"))
+        except Exception:
+            metadata = {}
+
+    fallback = preview_from_url_only(url, project_name)
+    return SourcePreview(
+        source_type=str(metadata.get("source_type") or fallback.source_type),
+        title=str(metadata.get("title") or project_name or fallback.title),
+        subtitle=str(metadata.get("subtitle") or fallback.subtitle),
+        image_url=str(metadata.get("image_url") or fallback.image_url),
+        image_path=str(image_path),
+        image_data_uri=image_to_data_uri(image_path),
+        status="Loaded local source preview",
+    )
 
 
 def _download(url: str, target: Path, timeout: int = 20) -> bool:
@@ -87,10 +125,17 @@ def _yt_dlp_metadata(url: str, timeout: int = 40) -> dict[str, Any]:
     return json.loads(completed.stdout)
 
 
-def capture_source_preview(url: str, project_name: str, projects_dir: Path) -> SourcePreview:
+def _write_metadata(preview_dir: Path, data: dict[str, Any]) -> None:
+    (preview_dir / "source_preview_metadata.json").write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def capture_source_preview_to_project_dir(url: str, project_name: str, project_dir: Path) -> SourcePreview:
     url = (url or "").strip()
     project_name = project_name or "YTIS_Source"
-    preview_dir = projects_dir / safe_project_name(project_name) / "source_preview"
+    preview_dir = project_dir / "source_preview"
     preview_dir.mkdir(parents=True, exist_ok=True)
     target = preview_dir / "source_preview.jpg"
 
@@ -106,6 +151,15 @@ def capture_source_preview(url: str, project_name: str, projects_dir: Path) -> S
         for candidate in candidates:
             try:
                 if _download(candidate, target):
+                    data = {
+                        "source_type": "Video",
+                        "source_url": url,
+                        "title": project_name,
+                        "subtitle": f"Video ID: {video_id}",
+                        "image_url": candidate,
+                        "image_path": str(target),
+                    }
+                    _write_metadata(preview_dir, data)
                     return SourcePreview(
                         source_type="Video",
                         title=project_name,
@@ -117,16 +171,7 @@ def capture_source_preview(url: str, project_name: str, projects_dir: Path) -> S
                     )
             except Exception as exc:
                 last_error = str(exc)
-        return SourcePreview(
-            source_type="Video",
-            title=project_name,
-            subtitle=f"Video ID: {video_id}",
-            image_url=candidates[-1],
-            image_path="",
-            image_data_uri="",
-            status="Preview capture failed",
-            error=last_error,
-        )
+        return SourcePreview("Video", project_name, f"Video ID: {video_id}", candidates[-1], "", "", "Preview capture failed", last_error)
 
     try:
         metadata = _yt_dlp_metadata(url)
@@ -145,21 +190,15 @@ def capture_source_preview(url: str, project_name: str, projects_dir: Path) -> S
             raise RuntimeError("No thumbnail URL found in yt-dlp metadata")
 
         _download(thumb_url, target)
-        meta_path = preview_dir / "source_preview_metadata.json"
-        meta_path.write_text(
-            json.dumps(
-                {
-                    "source_url": url,
-                    "title": title,
-                    "subtitle": subtitle,
-                    "image_url": thumb_url,
-                    "image_path": str(target),
-                },
-                indent=2,
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
+        data = {
+            "source_type": "Channel",
+            "source_url": url,
+            "title": title,
+            "subtitle": subtitle,
+            "image_url": thumb_url,
+            "image_path": str(target),
+        }
+        _write_metadata(preview_dir, data)
 
         return SourcePreview(
             source_type="Channel",
@@ -171,16 +210,33 @@ def capture_source_preview(url: str, project_name: str, projects_dir: Path) -> S
             status="Captured channel preview",
         )
     except Exception as exc:
-        return SourcePreview(
-            source_type="Channel",
-            title=project_name,
-            subtitle=url,
-            image_url="",
-            image_path="",
-            image_data_uri="",
-            status="Preview capture failed",
-            error=str(exc),
-        )
+        return SourcePreview("Channel", project_name, url, "", "", "", "Preview capture failed", str(exc))
+
+
+def capture_source_preview(url: str, project_name: str, projects_dir: Path) -> SourcePreview:
+    project_dir = expected_research_project_dir(projects_dir, project_name)
+    return capture_source_preview_to_project_dir(url, project_name, project_dir)
+
+
+def add_preview_to_zip(zip_path: Path, project_dir: Path) -> bool:
+    preview_dir = project_dir / "source_preview"
+    if not zip_path.exists() or not preview_dir.exists():
+        return False
+
+    preview_files = [p for p in preview_dir.rglob("*") if p.is_file()]
+    if not preview_files:
+        return False
+
+    base_name = project_dir.name
+    with zipfile.ZipFile(zip_path, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+        existing = set(archive.namelist())
+        for path in preview_files:
+            rel = path.relative_to(project_dir).as_posix()
+            arcname = f"{base_name}/{rel}"
+            if arcname in existing:
+                continue
+            archive.write(path, arcname)
+    return True
 
 
 def preview_from_url_only(url: str, project_name: str) -> SourcePreview:
@@ -188,24 +244,16 @@ def preview_from_url_only(url: str, project_name: str) -> SourcePreview:
     if video_match:
         video_id = video_match.group(1)
         thumb = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
-        return SourcePreview(
-            source_type="Video",
-            title=project_name or "YouTube video",
-            subtitle=f"Video ID: {video_id}",
-            image_url=thumb,
-            image_path="",
-            image_data_uri="",
-            status="Remote thumbnail preview",
-        )
+        return SourcePreview("Video", project_name or "YouTube video", f"Video ID: {video_id}", thumb, "", "", "Remote thumbnail preview")
 
     handle_match = HANDLE_RE.search(url or "")
     handle = handle_match.group(1) if handle_match else "youtube-channel"
     return SourcePreview(
-        source_type="Channel",
-        title=project_name or "YouTube channel",
-        subtitle=f"@{handle}",
-        image_url="https://www.youtube.com/img/desktop/yt_1200.png",
-        image_path="",
-        image_data_uri="",
-        status="Placeholder preview. Use Capture Preview for a real saved image.",
+        "Channel",
+        project_name or "YouTube channel",
+        f"@{handle}",
+        "https://www.youtube.com/img/desktop/yt_1200.png",
+        "",
+        "",
+        "Placeholder preview. Local preview will be captured automatically during build.",
     )
