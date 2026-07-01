@@ -16,6 +16,10 @@ def render_search(state: AppState) -> None:
     last_results: list[SearchResult] = []
     last_query: dict[str, str] = {"value": ""}
 
+    def open_viewer_for_file(file_path: str) -> None:
+        setattr(state, "viewer_file_path", file_path)
+        ui.navigate.to("/viewer")
+
     with ui.column().classes("ytis-page gap-4"):
         with ui.row().classes("w-full justify-between items-center"):
             with ui.column().classes("gap-0"):
@@ -73,7 +77,7 @@ def render_search(state: AppState) -> None:
                                 ui.label(f"{result.project} | video id: {result.video_id or '-'} | matches: {result.match_count}").classes("text-xs text-blue-300")
                                 ui.label(result.snippet).classes("text-sm text-slate-300")
                             with ui.column().classes("gap-2"):
-                                ui.button("Viewer", icon="article", on_click=lambda: ui.navigate.to("/viewer")).props("outline dense")
+                                ui.button("Open in Viewer", icon="article", on_click=lambda p=result.file_path: open_viewer_for_file(p)).props("outline dense")
                                 ui.button("Open TXT", icon="description", on_click=lambda p=result.file_path: open_path(p)).props("outline dense")
 
         def run_search() -> None:

@@ -17,13 +17,34 @@ def _file_label(path: Path) -> str:
     return name[:46] + "..." + name[-46:]
 
 
+def _project_for_file(projects: list[dict], file_path: str | None) -> str | None:
+    if not file_path:
+        return None
+    try:
+        target = Path(file_path).resolve()
+    except Exception:
+        return None
+
+    for project in projects:
+        clean_dir = Path(str(project.get("project_dir", ""))) / "clean_txt"
+        try:
+            if clean_dir.exists() and target.parent.resolve() == clean_dir.resolve():
+                return val(project, "name", "Unnamed")
+        except Exception:
+            continue
+    return None
+
+
 def render_viewer(state: AppState) -> None:
     render_shell(state, "/viewer")
 
     projects = state.load_projects()
     project_names = [val(p, "name", "Unnamed") for p in projects]
+    requested_file = getattr(state, "viewer_file_path", None)
+
     latest = state.current_project or state.load_latest_project()
-    default_project = val(latest, "name", project_names[0] if project_names else "")
+    requested_project = _project_for_file(projects, requested_file)
+    default_project = requested_project or val(latest, "name", project_names[0] if project_names else "")
 
     with ui.column().classes("ytis-page gap-4"):
         with ui.row().classes("w-full justify-between items-center"):
@@ -127,16 +148,27 @@ def render_viewer(state: AppState) -> None:
                         render_details()
                         return
 
-                    selected_label = list(options.keys())[0]
+                    default_label = list(options.keys())[0]
+                    if requested_file:
+                        try:
+                            requested_resolved = Path(str(requested_file)).resolve()
+                            for label, option_path in options.items():
+                                if Path(option_path).resolve() == requested_resolved:
+                                    default_label = label
+                                    break
+                        except Exception:
+                            pass
+
                     transcript_select = ui.select(
                         list(options.keys()),
-                        value=selected_label,
+                        value=default_label,
                         label=f"Transcript file ({len(files)} available)",
                     ).classes("w-full")
-                    state_holder["selected"] = options[selected_label]
+                    state_holder["selected"] = options[default_label]
 
                     def on_change() -> None:
                         state_holder["selected"] = options.get(transcript_select.value)
+                        setattr(state, "viewer_file_path", state_holder["selected"])
                         render_details()
 
                     transcript_select.on("update:model-value", lambda e: on_change())
