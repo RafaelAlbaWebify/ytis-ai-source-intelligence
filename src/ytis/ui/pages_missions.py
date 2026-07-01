@@ -9,7 +9,6 @@ from ytis.core.missions import (
     MISSION_TOPIC_OPTIONS,
     create_mission,
     create_mission_bundle,
-    generate_mission_prompt,
     list_missions,
     mission_stats,
     read_mission_prompt,
@@ -33,12 +32,14 @@ def _downloads_dir(state: AppState) -> Path:
     return Path.home() / "Downloads"
 
 
-def _metric(title: str, value: str, caption: str = "") -> None:
+def _metric(title: str, value: str, caption: str = ""):
+    value_label = None
     with ui.card().classes("ytis-metric p-4"):
         ui.label(title).classes("text-sm text-slate-400")
-        ui.label(value).classes("text-2xl font-bold whitespace-nowrap")
+        value_label = ui.label(value).classes("text-2xl font-bold whitespace-nowrap")
         if caption:
             ui.label(caption).classes("text-xs text-slate-500")
+    return value_label
 
 
 def _copy_to_clipboard(text: str) -> None:
@@ -53,8 +54,8 @@ def render_missions(state: AppState) -> None:
     downloads_dir = _downloads_dir(state)
     projects = audit_projects(state.load_projects())
     project_names = [val(p, "name", "Unnamed") for p in projects]
-    missions = list_missions(project_root)
-    stats = mission_stats(missions)
+    initial_missions = list_missions(project_root)
+    initial_stats = mission_stats(initial_missions)
 
     with ui.column().classes("ytis-page gap-4"):
         with ui.row().classes("w-full justify-between items-center"):
@@ -67,10 +68,22 @@ def render_missions(state: AppState) -> None:
                 ui.button("Open Missions Folder", icon="folder_open", on_click=lambda: open_path(project_root / "missions"), color="primary")
 
         with ui.grid(columns=4).classes("w-full gap-3"):
-            _metric("Missions", str(stats["missions"]), "total")
-            _metric("Active", str(stats["active"]), "in progress")
-            _metric("Paused", str(stats["paused"]), "waiting")
-            _metric("Completed", str(stats["completed"]), "finished")
+            missions_metric = _metric("Missions", str(initial_stats["missions"]), "total")
+            active_metric = _metric("Active", str(initial_stats["active"]), "in progress")
+            paused_metric = _metric("Paused", str(initial_stats["paused"]), "waiting")
+            completed_metric = _metric("Completed", str(initial_stats["completed"]), "finished")
+
+        def refresh_metrics() -> None:
+            current = mission_stats(list_missions(project_root))
+            missions_metric.text = str(current["missions"])
+            active_metric.text = str(current["active"])
+            paused_metric.text = str(current["paused"])
+            completed_metric.text = str(current["completed"])
+            for metric in [missions_metric, active_metric, paused_metric, completed_metric]:
+                metric.update()
+
+        # Created before callbacks, assigned after Mission Library container exists.
+        render_missions_list_ref = {"fn": None}
 
         with ui.expansion("Create New Mission", icon="add_task", value=True).classes("ytis-card w-full text-white").props("expand-separator dense"):
             with ui.column().classes("p-4 gap-3"):
@@ -111,9 +124,13 @@ def render_missions(state: AppState) -> None:
                         topics=list(selected_topics),
                     )
                     status_label.text = f"Created: {mission.mission_id}"
+                    status_label.classes(remove="text-slate-400")
+                    status_label.classes(add="text-green-400")
                     status_label.update()
-                    ui.notify("Mission created", type="positive")
-                    open_path(mission.folder)
+                    refresh_metrics()
+                    if render_missions_list_ref["fn"]:
+                        render_missions_list_ref["fn"]()
+                    ui.notify("Mission created and library refreshed", type="positive")
 
                 focus_select.on("update:model-value", lambda e: apply_preset())
                 reset_btn.on("click", apply_preset)
@@ -135,6 +152,17 @@ def render_missions(state: AppState) -> None:
                         ui.button("Close", on_click=dialog.close).props("outline")
                         ui.button("Copy Prompt", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Prompt copied", type="positive")), color="primary")
                 dialog.open()
+
+            def do_bundle(mission) -> None:
+                result = create_mission_bundle(mission, projects, downloads_dir)
+                ui.notify(f"Mission bundle created with {len(result.included_zips)} packs", type="positive")
+                open_path(result.bundle_path)
+
+            def do_status(mission, status: str) -> None:
+                update_mission_status(mission, status)
+                ui.notify(f"Mission status updated: {status}", type="positive")
+                refresh_metrics()
+                render_missions_list()
 
             def render_missions_list() -> None:
                 missions_container.clear()
@@ -162,14 +190,5 @@ def render_missions(state: AppState) -> None:
                                     ui.button("Pause", icon="pause_circle", on_click=lambda m=mission: do_status(m, "paused")).props("outline dense")
                                     ui.button("Reactivate", icon="play_circle", on_click=lambda m=mission: do_status(m, "active")).props("outline dense")
 
-            def do_bundle(mission) -> None:
-                result = create_mission_bundle(mission, projects, downloads_dir)
-                ui.notify(f"Mission bundle created with {len(result.included_zips)} packs", type="positive")
-                open_path(result.bundle_path)
-
-            def do_status(mission, status: str) -> None:
-                update_mission_status(mission, status)
-                ui.notify(f"Mission status updated: {status}", type="positive")
-                render_missions_list()
-
+            render_missions_list_ref["fn"] = render_missions_list
             render_missions_list()
