@@ -49,8 +49,11 @@ def render_shell(state: AppState, active_path: str) -> None:
             ui.label(getattr(state, "app_version", "")).classes("text-xs text-slate-400")
 
 def register_pages(app_version: str = "") -> None:
-    state = AppState()
-    state.app_version = app_version
+    try:
+        state = AppState(app_version=app_version)
+    except TypeError:
+        state = AppState()
+        state.app_version = app_version
 
     from ytis.ui.pages_dashboard import render_dashboard
     from ytis.ui.pages_build import render_build
@@ -97,16 +100,32 @@ def register_pages(app_version: str = "") -> None:
         render_analyze(state)
     @ui.page("/inspector")
     def inspector_page() -> None:
-        render_inspector(state) if render_inspector else (render_shell(state, "/inspector"), ui.label("Inspector module not available").classes("ytis-page text-red-300"))
+        if render_inspector:
+            render_inspector(state)
+        else:
+            render_shell(state, "/inspector")
+            ui.label("Inspector module not available").classes("ytis-page text-red-300")
     @ui.page("/repair")
     def repair_page() -> None:
-        render_repair(state) if render_repair else (render_shell(state, "/repair"), ui.label("Repair module not available").classes("ytis-page text-red-300"))
+        if render_repair:
+            render_repair(state)
+        else:
+            render_shell(state, "/repair")
+            ui.label("Repair module not available").classes("ytis-page text-red-300")
     @ui.page("/viewer")
     def viewer_page() -> None:
-        render_viewer(state) if render_viewer else (render_shell(state, "/viewer"), ui.label("Viewer module not available").classes("ytis-page text-red-300"))
+        if render_viewer:
+            render_viewer(state)
+        else:
+            render_shell(state, "/viewer")
+            ui.label("Viewer module not available").classes("ytis-page text-red-300")
     @ui.page("/intelligence")
     def intelligence_page() -> None:
-        render_intelligence(state) if render_intelligence else (render_shell(state, "/intelligence"), ui.label("Intelligence module not available").classes("ytis-page text-red-300"))
+        if render_intelligence:
+            render_intelligence(state)
+        else:
+            render_shell(state, "/intelligence")
+            ui.label("Intelligence module not available").classes("ytis-page text-red-300")
     @ui.page("/analysis-inbox")
     def analysis_inbox_page() -> None:
         render_analysis_inbox(state)
