@@ -8,7 +8,6 @@ from typing import Any
 from nicegui import ui
 
 from ytis.core.health import get_health_snapshot
-from ytis.core.paths import default_downloads_dir
 from ytis.ui.state import AppState, fmt_int, short_path, val
 
 
@@ -22,12 +21,13 @@ def open_path(path: str | Path) -> None:
         os.startfile(str(path_obj))
 
 
-def page_title(title: str, subtitle: str) -> None:
-    with ui.row().classes("w-full items-center justify-between mb-2"):
+def page_title(title: str, subtitle: str, show_action: bool = True) -> None:
+    with ui.row().classes("w-full items-center justify-between mb-1"):
         with ui.column().classes("gap-0"):
             ui.label(title).classes("text-3xl font-bold")
             ui.label(subtitle).classes("text-sm text-slate-300")
-        ui.button("New Research Pack", icon="add", on_click=lambda: ui.navigate.to("/build"), color="primary").classes("px-5")
+        if show_action:
+            ui.button("New Research Pack", icon="add", on_click=lambda: ui.navigate.to("/build"), color="primary").classes("px-5")
 
 
 def metric_card(title: str, value: str, note: str = "") -> None:
@@ -67,6 +67,31 @@ def project_summary_card(project: dict[str, Any], title: str = "Current Project"
             metric_card("ZIP", "Ready" if project.get("zip_path") else "Missing")
 
 
+def command_metric_row(project: dict[str, Any]) -> None:
+    with ui.grid(columns=5).classes("w-full gap-3"):
+        metric_card("Videos", val(project, "videos_found", "0"), "indexed")
+        metric_card("Transcripts", val(project, "transcripts_created", "0"), "clean TXT")
+        metric_card("Missing", val(project, "missing_subtitles", "0"), "subtitle gaps")
+        metric_card("Words", fmt_int(project.get("total_words")), "analysis volume")
+        metric_card("ZIP", "Ready" if project.get("zip_path") else "Missing", "upload pack")
+
+
+def quick_actions_card(project: dict[str, Any]) -> None:
+    with ui.card().classes("ytis-card p-5 w-full"):
+        ui.label("Quick Actions").classes("text-xl font-bold")
+        with ui.grid(columns=2).classes("w-full gap-3 mt-2"):
+            ui.button("Build Pack", icon="rocket_launch", on_click=lambda: ui.navigate.to("/build"), color="primary").classes("w-full")
+            ui.button("Search Transcripts", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline").classes("w-full")
+            if project.get("project_dir"):
+                ui.button("Open Project Folder", icon="folder_open", on_click=lambda p=project: open_path(str(p["project_dir"]))).props("outline").classes("w-full")
+            else:
+                ui.button("Open Project Folder", icon="folder_open").props("outline disable").classes("w-full")
+            if project.get("zip_path"):
+                ui.button("Open ZIP", icon="inventory_2", on_click=lambda p=project: open_path(str(p["zip_path"]))).props("outline").classes("w-full")
+            else:
+                ui.button("Open ZIP", icon="inventory_2").props("outline disable").classes("w-full")
+
+
 def recent_projects_list(projects: list[dict[str, Any]], limit: int = 6) -> None:
     with ui.card().classes("ytis-card p-5 w-full"):
         with ui.row().classes("w-full justify-between items-center"):
@@ -82,14 +107,14 @@ def recent_projects_list(projects: list[dict[str, Any]], limit: int = 6) -> None
                     ui.label(val(project, "name", "Unnamed")).classes("font-bold")
                     ui.label(f"{val(project, 'transcripts_created', '0')} transcripts | {fmt_int(project.get('total_words'))} words").classes("text-xs text-slate-400")
                 with ui.row().classes("gap-2"):
-                    ui.button("Load", on_click=lambda p=project: ui.navigate.to(f"/project?name={p.get('name','')}")).props("outline dense")
+                    ui.button("Build", on_click=lambda p=project: ui.navigate.to("/build")).props("outline dense")
                     if project.get("project_dir"):
                         ui.button("Folder", on_click=lambda p=project: open_path(str(p["project_dir"]))).props("outline dense")
                     if project.get("zip_path"):
                         ui.button("ZIP", on_click=lambda p=project: open_path(str(p["zip_path"]))).props("outline dense")
 
 
-def health_card(app_version: str) -> None:
+def health_card(app_version: str, compact: bool = False) -> None:
     health = get_health_snapshot()
     with ui.card().classes("ytis-card p-5 w-full"):
         ui.label("Health").classes("text-xl font-bold")
@@ -101,13 +126,15 @@ def health_card(app_version: str) -> None:
             ("Project root", short_path(health.get("project_root", "-"), 80)),
             ("Downloads", short_path(health.get("downloads_dir", "-"), 80)),
         ]
+        if compact:
+            rows = rows[:4]
         for key, value in rows:
             with ui.row().classes("w-full justify-between gap-4"):
                 ui.label(key).classes("text-sm text-slate-400")
                 ui.label(value).classes("text-sm text-right break-all")
 
 
-def source_preview(url: str, project_name: str) -> None:
+def source_preview(url: str, project_name: str, compact: bool = False) -> None:
     video_match = YOUTUBE_VIDEO_RE.search(url or "")
     if video_match:
         video_id = video_match.group(1)
@@ -121,12 +148,14 @@ def source_preview(url: str, project_name: str) -> None:
         source_type = "Channel"
         subtitle = f"@{handle}"
 
+    image_height = "150px" if compact else "210px"
+
     with ui.card().classes("ytis-card p-5 w-full"):
         with ui.row().classes("w-full justify-between items-center"):
             ui.label("Source Preview").classes("text-xl font-bold")
             ui.label(source_type).classes("text-xs text-red-400")
-        ui.image(image_url).classes("w-full rounded-xl").style("height: 210px; object-fit: cover; background: #0f172a;")
+        ui.image(image_url).classes("w-full rounded-xl").style(f"height: {image_height}; object-fit: cover; background: #0f172a;")
         ui.label(project_name or "YouTube Source").classes("text-lg font-bold")
         ui.label(subtitle).classes("text-sm text-slate-400")
         ui.label(url or "-").classes("text-xs text-blue-300 break-all")
-        ui.label("Video URLs show a thumbnail. Channel screenshot capture is planned for the next feature patch.").classes("text-xs text-slate-500")
+        ui.label("Video URLs show a thumbnail. Channel screenshot capture is planned.").classes("text-xs text-slate-500")
