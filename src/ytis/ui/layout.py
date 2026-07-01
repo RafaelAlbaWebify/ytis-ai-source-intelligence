@@ -1,119 +1,112 @@
 from __future__ import annotations
 
 from nicegui import ui
-
 from ytis.ui.state import AppState
-from ytis.ui.theme import apply_theme
-
 
 NAV_ITEMS = [
     ("Dashboard", "/", "dashboard"),
-    ("Build Pack", "/build", "rocket_launch"),
+    ("Build", "/build", "construction"),
     ("Projects", "/projects", "folder"),
     ("Search", "/search", "search"),
     ("Viewer", "/viewer", "article"),
-    ("Repair", "/repair", "construction"),
+    ("Inspector", "/inspector", "fact_check"),
+    ("Repair", "/repair", "healing"),
+    ("Health", "/health", "monitor_heart"),
     ("Analyze", "/analyze", "psychology"),
     ("Intelligence", "/intelligence", "hub"),
-    ("Inspect", "/inspect", "inventory_2"),
-    ("Health", "/health", "health_and_safety"),
+    ("Analysis Inbox", "/analysis-inbox", "move_to_inbox"),
 ]
 
-
-def render_shell(state: AppState, active: str) -> None:
-    apply_theme()
-
-    with ui.left_drawer(value=True).classes("bg-[#081321] text-white border-r border-slate-800"):
-        with ui.column().classes("w-full p-4 gap-3"):
-            with ui.row().classes("items-center gap-3"):
-                ui.icon("smart_display").classes("text-4xl text-red-500")
-                with ui.column().classes("gap-0"):
-                    ui.label("YTIS").classes("text-3xl font-bold text-blue-400")
-                    ui.label("YouTube Intelligence System").classes("text-xs text-slate-300")
-                    ui.label(state.app_version).classes("text-xs text-slate-500")
-
-            ui.separator().classes("bg-slate-700")
-
+def render_shell(state: AppState, active_path: str) -> None:
+    ui.add_head_html("""
+        <style>
+        body { background: #0f172a; }
+        .ytis-page { width: 100%; max-width: 1500px; margin: 0 auto; padding: 24px; color: #e2e8f0; }
+        .ytis-card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; }
+        .ytis-mini-card { background: #0b1220; border: 1px solid #1e293b; border-radius: 12px; }
+        .ytis-metric { background: #111827; border: 1px solid #1f2937; border-radius: 16px; min-height: 108px; }
+        .ytis-sidebar { background: #020617; border-right: 1px solid #1e293b; }
+        .ytis-nav-active { background: #1d4ed8 !important; color: white !important; }
+        .ytis-nav-button { width: 100%; justify-content: flex-start; }
+        </style>
+    """)
+    with ui.left_drawer(value=True).classes("ytis-sidebar text-white"):
+        with ui.column().classes("w-full gap-3 p-3"):
+            ui.label("YTIS").classes("text-2xl font-bold")
+            ui.label("YouTube Intelligence System").classes("text-xs text-slate-400")
+            ui.separator()
             for label, path, icon in NAV_ITEMS:
-                button = ui.button(label, icon=icon, on_click=lambda p=path: ui.navigate.to(p)).classes("w-full justify-start")
-                if path != active:
-                    button.props("outline")
-                else:
-                    button.props("color=primary")
+                button = ui.button(label, icon=icon, on_click=lambda p=path: ui.navigate.to(p)).props("flat")
+                button.classes("ytis-nav-button")
+                if path == active_path:
+                    button.classes(add="ytis-nav-active")
+            ui.separator()
+            ui.label("Current project").classes("text-xs text-slate-500")
+            ui.label(getattr(state, "current_project_name", "") or "No active project").classes("text-sm text-slate-300")
+    with ui.header().classes("bg-slate-950 text-white border-b border-slate-800"):
+        with ui.row().classes("w-full justify-between items-center"):
+            ui.label("YTIS Local Research OS").classes("font-bold")
+            ui.label(getattr(state, "app_version", "")).classes("text-xs text-slate-400")
 
-            ui.space()
+def register_pages(app_version: str = "") -> None:
+    state = AppState()
+    state.app_version = app_version
 
-            latest = state.current_project or state.load_latest_project()
-            with ui.card().classes("ytis-mini-card p-3 w-full"):
-                ui.label("CURRENT PROJECT").classes("text-[11px] text-slate-400")
-                if latest:
-                    ui.label(str(latest.get("name", "Unnamed"))).classes("font-bold")
-                    ui.label(str(latest.get("build_mode", "-")) + " mode").classes("text-xs text-blue-300")
-                    with ui.row().classes("justify-between"):
-                        ui.label("Transcripts").classes("text-xs text-slate-400")
-                        ui.label(str(latest.get("transcripts_created", "0"))).classes("text-xs")
-                    with ui.row().classes("justify-between"):
-                        ui.label("ZIP").classes("text-xs text-slate-400")
-                        ui.label("Ready" if latest.get("zip_path") else "Missing").classes("text-xs text-green-400")
-                else:
-                    ui.label("No project yet").classes("text-sm text-slate-400")
-
-    with ui.header().classes("bg-[#07111f] text-white border-b border-slate-800"):
-        with ui.row().classes("w-full items-center justify-between px-4"):
-            ui.label("YTIS").classes("font-bold text-blue-300")
-            ui.button("New Research Pack", icon="add", on_click=lambda: ui.navigate.to("/build"), color="primary").props("dense")
-
-
-def register_pages(app_version: str) -> None:
-    from ytis.ui.pages_analyze import render_analyze
-    from ytis.ui.pages_build import render_build
     from ytis.ui.pages_dashboard import render_dashboard
-    from ytis.ui.pages_health import render_health
-    from ytis.ui.pages_inspect import render_inspect
-    from ytis.ui.pages_intelligence import render_intelligence
+    from ytis.ui.pages_build import render_build
     from ytis.ui.pages_projects import render_projects
-    from ytis.ui.pages_repair import render_repair
     from ytis.ui.pages_search import render_search
-    from ytis.ui.pages_viewer import render_viewer
+    from ytis.ui.pages_health import render_health
+    from ytis.ui.pages_analyze import render_analyze
+    from ytis.ui.pages_analysis_inbox import render_analysis_inbox
 
-    state = AppState(app_version=app_version)
+    try:
+        from ytis.ui.pages_inspector import render_inspector
+    except Exception:
+        render_inspector = None
+    try:
+        from ytis.ui.pages_repair import render_repair
+    except Exception:
+        render_repair = None
+    try:
+        from ytis.ui.pages_viewer import render_viewer
+    except Exception:
+        render_viewer = None
+    try:
+        from ytis.ui.pages_intelligence import render_intelligence
+    except Exception:
+        render_intelligence = None
 
     @ui.page("/")
     def dashboard_page() -> None:
         render_dashboard(state)
-
     @ui.page("/build")
     def build_page() -> None:
         render_build(state)
-
     @ui.page("/projects")
     def projects_page() -> None:
         render_projects(state)
-
     @ui.page("/search")
     def search_page() -> None:
         render_search(state)
-
-    @ui.page("/viewer")
-    def viewer_page() -> None:
-        render_viewer(state)
-
-    @ui.page("/repair")
-    def repair_page() -> None:
-        render_repair(state)
-
-    @ui.page("/analyze")
-    def analyze_page() -> None:
-        render_analyze(state)
-
-    @ui.page("/intelligence")
-    def intelligence_page() -> None:
-        render_intelligence(state)
-
-    @ui.page("/inspect")
-    def inspect_page() -> None:
-        render_inspect(state)
-
     @ui.page("/health")
     def health_page() -> None:
         render_health(state)
+    @ui.page("/analyze")
+    def analyze_page() -> None:
+        render_analyze(state)
+    @ui.page("/inspector")
+    def inspector_page() -> None:
+        render_inspector(state) if render_inspector else (render_shell(state, "/inspector"), ui.label("Inspector module not available").classes("ytis-page text-red-300"))
+    @ui.page("/repair")
+    def repair_page() -> None:
+        render_repair(state) if render_repair else (render_shell(state, "/repair"), ui.label("Repair module not available").classes("ytis-page text-red-300"))
+    @ui.page("/viewer")
+    def viewer_page() -> None:
+        render_viewer(state) if render_viewer else (render_shell(state, "/viewer"), ui.label("Viewer module not available").classes("ytis-page text-red-300"))
+    @ui.page("/intelligence")
+    def intelligence_page() -> None:
+        render_intelligence(state) if render_intelligence else (render_shell(state, "/intelligence"), ui.label("Intelligence module not available").classes("ytis-page text-red-300"))
+    @ui.page("/analysis-inbox")
+    def analysis_inbox_page() -> None:
+        render_analysis_inbox(state)
