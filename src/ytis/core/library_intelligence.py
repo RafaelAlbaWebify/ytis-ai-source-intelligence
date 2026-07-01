@@ -56,6 +56,14 @@ class BundleResult:
 
 
 @dataclass
+class EvidencePackResult:
+    pack_path: Path
+    markdown_path: Path
+    csv_path: Path
+    evidence_count: int
+
+
+@dataclass
 class TopicHit:
     project: str
     topic: str
@@ -137,7 +145,7 @@ def _count_keyword(text_lower: str, keyword: str) -> int:
     return len(re.findall(rf"\b{escaped}\b", text_lower))
 
 
-def _snippet(text: str, keyword: str, radius: int = 150) -> str:
+def _snippet(text: str, keyword: str, radius: int = 170) -> str:
     lower = text.lower()
     idx = lower.find(keyword.lower())
     if idx < 0:
@@ -204,6 +212,22 @@ def filter_topic_evidence(evidence: list[TopicHit], topic: str = "All topics", p
     return filtered
 
 
+def quick_insights(projects: list[dict[str, Any]], matrix_rows: list[dict[str, Any]]) -> list[str]:
+    insights: list[str] = []
+    stats = summarize(projects)
+    insights.append(f"Library contains {stats.projects} projects, {stats.transcripts} transcripts, and {stats.words:,} words.")
+    if matrix_rows:
+        top = matrix_rows[0]
+        insights.append(f"Highest-volume topic is {top['Topic']} with {top['Total']} local matches.")
+        for row in matrix_rows[:5]:
+            insights.append(f"{row['Topic']}: strongest project is {row['Strongest']} ({row['Total']} total matches).")
+    ranked = ranked_projects(projects)
+    if ranked:
+        strongest = ranked[0]
+        insights.append(f"Largest project is {strongest.get('name', 'Unnamed')} with {as_int(strongest.get('total_words')):,} words.")
+    return insights
+
+
 def export_topic_matrix(matrix_rows: list[dict[str, Any]], downloads_dir: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = downloads_dir / f"YTIS_TOPIC_MATRIX_{stamp}.csv"
@@ -220,12 +244,86 @@ def export_topic_matrix(matrix_rows: list[dict[str, Any]], downloads_dir: Path) 
 def export_topic_evidence(evidence: list[TopicHit], downloads_dir: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = downloads_dir / f"YTIS_TOPIC_EVIDENCE_{stamp}.csv"
+    write_evidence_csv(evidence, path)
+    return path
+
+
+def write_evidence_csv(evidence: list[TopicHit], path: Path) -> None:
     with path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=["project", "topic", "file_name", "file_path", "matches", "snippet"])
         writer.writeheader()
         for item in evidence:
             writer.writerow(item.__dict__)
-    return path
+
+
+def write_evidence_markdown(evidence: list[TopicHit], path: Path, title: str, focus: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        f"Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "",
+        f"Focus: {focus or '-'}",
+        "",
+        f"Evidence items: {len(evidence)}",
+        "",
+    ]
+    grouped: dict[str, list[TopicHit]] = {}
+    for item in evidence:
+        grouped.setdefault(item.project, []).append(item)
+
+    for project, items in grouped.items():
+        lines.extend([f"## {project}", ""])
+        for item in items:
+            lines.extend([
+                f"### {item.topic} | {item.matches} matches",
+                f"- File: `{item.file_name}`",
+                f"- Path: `{item.file_path}`",
+                "",
+                item.snippet or "(no snippet)",
+                "",
+            ])
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def create_topic_evidence_pack(evidence: list[TopicHit], downloads_dir: Path, topic: str, project: str, focus: str = "") -> EvidencePackResult:
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_topic = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in topic or "All_topics").strip("_") or "All_topics"
+    safe_project = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in project or "All_projects").strip("_") or "All_projects"
+    root = downloads_dir / f"YTIS_EVIDENCE_PACK_{safe_topic}_{safe_project}_{stamp}"
+    root.mkdir(parents=True, exist_ok=True)
+
+    md_path = root / "EVIDENCE_SUMMARY.md"
+    csv_path = root / "EVIDENCE_ITEMS.csv"
+    readme_path = root / "README.md"
+
+    title = f"YTIS Evidence Pack - {topic} / {project}"
+    write_evidence_markdown(evidence, md_path, title, focus)
+    write_evidence_csv(evidence, csv_path)
+
+    readme_path.write_text(
+        f"""# YTIS Topic Evidence Pack
+
+Topic filter: {topic}
+Project filter: {project}
+Evidence items: {len(evidence)}
+
+Files:
+- EVIDENCE_SUMMARY.md
+- EVIDENCE_ITEMS.csv
+
+Use this as a focused evidence pack for a single topic/project investigation.
+""",
+        encoding="utf-8",
+    )
+
+    pack_zip = downloads_dir / f"YTIS_EVIDENCE_PACK_{safe_topic}_{safe_project}_{stamp}.zip"
+    with zipfile.ZipFile(pack_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in root.rglob("*"):
+            if path.is_file():
+                zf.write(path, path.relative_to(root))
+
+    return EvidencePackResult(pack_zip, md_path, csv_path, len(evidence))
 
 
 def generate_prompt(projects: list[dict[str, Any]], focus: str, focus_preset: str = "Custom") -> str:
@@ -314,6 +412,7 @@ def create_library_upload_bundle(projects: list[dict[str, Any]], focus: str, dow
     matrix_rows, evidence = scan_topic_matrix(projects)
     matrix_path = bundle_root / "YTIS_TOPIC_MATRIX.csv"
     evidence_path = bundle_root / "YTIS_TOPIC_EVIDENCE.csv"
+    insights_path = bundle_root / "YTIS_QUICK_INSIGHTS.md"
 
     if matrix_rows:
         with matrix_path.open("w", encoding="utf-8", newline="") as fh:
@@ -322,12 +421,8 @@ def create_library_upload_bundle(projects: list[dict[str, Any]], focus: str, dow
             writer.writerows(matrix_rows)
     else:
         matrix_path.write_text("", encoding="utf-8")
-
-    with evidence_path.open("w", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=["project", "topic", "file_name", "file_path", "matches", "snippet"])
-        writer.writeheader()
-        for item in evidence:
-            writer.writerow(item.__dict__)
+    write_evidence_csv(evidence, evidence_path)
+    insights_path.write_text("# YTIS Quick Insights\n\n" + "\n".join(f"- {item}" for item in quick_insights(projects, matrix_rows)), encoding="utf-8")
 
     stats = summarize(projects)
     zip_dir = bundle_root / "research_packs"
@@ -372,6 +467,7 @@ Included analysis helpers:
 - YTIS_MULTI_PROJECT_ANALYSIS_PROMPT.md
 - YTIS_TOPIC_MATRIX.csv
 - YTIS_TOPIC_EVIDENCE.csv
+- YTIS_QUICK_INSIGHTS.md
 
 How to use:
 1. Upload this bundle ZIP to ChatGPT, or upload the ZIP files inside `research_packs`.

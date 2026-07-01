@@ -7,10 +7,12 @@ from ytis.core.library_intelligence import (
     TOPIC_KEYWORDS,
     compact,
     create_library_upload_bundle,
+    create_topic_evidence_pack,
     export_topic_evidence,
     export_topic_matrix,
     filter_topic_evidence,
     generate_prompt,
+    quick_insights,
     ranked_projects,
     save_prompt,
     scan_topic_matrix,
@@ -31,9 +33,7 @@ def _metric(title: str, value: str, caption: str = "") -> None:
 
 
 def _section(title: str, icon: str, opened: bool = False):
-    return ui.expansion(title, icon=icon, value=opened).classes(
-        "ytis-card w-full text-white"
-    ).props("expand-separator dense")
+    return ui.expansion(title, icon=icon, value=opened).classes("ytis-card w-full text-white").props("expand-separator dense")
 
 
 def render_intelligence(state: AppState) -> None:
@@ -43,6 +43,7 @@ def render_intelligence(state: AppState) -> None:
     ranked = ranked_projects(projects)
     stats = summarize(projects)
     topic_rows, topic_evidence = scan_topic_matrix(projects)
+    insights = quick_insights(projects, topic_rows)
     project_names = [val(p, "name", "Unnamed") for p in projects]
     project_checks: dict[str, object] = {}
 
@@ -59,7 +60,7 @@ def render_intelligence(state: AppState) -> None:
         with ui.row().classes("w-full justify-between items-center"):
             with ui.column().classes("gap-0"):
                 ui.label("Multi-Project Intelligence").classes("text-3xl font-bold")
-                ui.label("Compare saved packs, scan topics, create bundles, and drill into evidence").classes("text-sm text-slate-300")
+                ui.label("Scope, scan, drill down, export evidence, and create analysis bundles").classes("text-sm text-slate-300")
             with ui.row().classes("gap-2"):
                 ui.button("Search Library", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline")
                 ui.button("Build New Pack", icon="add", on_click=lambda: ui.navigate.to("/build"), color="primary")
@@ -74,7 +75,7 @@ def render_intelligence(state: AppState) -> None:
         with ui.grid(columns=3).classes("w-full gap-4"):
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Analysis Scope").classes("text-xl font-bold")
-                ui.label("Choose projects and analysis focus for the prompt/bundle.").classes("text-sm text-slate-400")
+                ui.label("Choose projects and analysis focus for prompt/bundle.").classes("text-sm text-slate-400")
                 for p in ranked:
                     name = val(p, "name", "Unnamed")
                     project_checks[name] = ui.checkbox(name, value=True).classes("text-sm")
@@ -86,13 +87,20 @@ def render_intelligence(state: AppState) -> None:
                 scope_summary = ui.column().classes("w-full gap-1")
 
             with ui.card().classes("ytis-card p-5 w-full"):
-                ui.label("Library Upload Bundle").classes("text-xl font-bold")
-                ui.label("Create one ZIP with selected packs, prompt, README, matrix, and evidence.").classes("text-sm text-slate-400")
+                ui.label("Actions").classes("text-xl font-bold")
                 bundle_status = ui.label("No bundle created yet.").classes("text-xs text-slate-500")
-                with ui.row().classes("gap-2 mt-3"):
-                    create_bundle_btn = ui.button("Create Selected Bundle", icon="archive", color="primary")
-                    open_bundle_btn = ui.button("Open Bundle", icon="inventory_2").props("outline")
+                with ui.column().classes("gap-2 mt-2"):
+                    create_bundle_btn = ui.button("Create Selected Bundle", icon="archive", color="primary").classes("w-full")
+                    open_bundle_btn = ui.button("Open Bundle", icon="inventory_2").props("outline").classes("w-full")
+                    create_evidence_pack_btn = ui.button("Create Evidence Pack", icon="topic").props("outline").classes("w-full")
+                    open_evidence_pack_btn = ui.button("Open Evidence Pack", icon="folder_zip").props("outline").classes("w-full")
                     open_bundle_btn.disable()
+                    open_evidence_pack_btn.disable()
+
+        with ui.card().classes("ytis-card p-5 w-full"):
+            ui.label("Quick Insights").classes("text-xl font-bold")
+            for item in insights[:7]:
+                ui.label("- " + item).classes("text-sm text-slate-300")
 
         with _section("Project Comparison", "table_chart", opened=False):
             with ui.column().classes("p-4"):
@@ -149,10 +157,13 @@ def render_intelligence(state: AppState) -> None:
                 drilldown_status = ui.label("").classes("text-xs text-slate-400")
                 drilldown_results = ui.column().classes("w-full gap-2")
 
+                def current_filtered_evidence():
+                    filtered = filter_topic_evidence(topic_evidence, topic_select.value or "All topics", project_select.value or "All projects")
+                    return filtered[: int(limit_select.value or 25)]
+
                 def render_drilldown() -> None:
                     drilldown_results.clear()
-                    filtered = filter_topic_evidence(topic_evidence, topic_select.value or "All topics", project_select.value or "All projects")
-                    filtered = filtered[: int(limit_select.value or 25)]
+                    filtered = current_filtered_evidence()
                     drilldown_status.text = f"{len(filtered)} evidence items shown"
                     drilldown_status.update()
                     with drilldown_results:
@@ -195,6 +206,7 @@ def render_intelligence(state: AppState) -> None:
                 output.style("font-family: Consolas, monospace; font-size: 12px; line-height: 1.45;")
 
                 last_bundle = {"path": None}
+                last_evidence_pack = {"path": None}
 
                 def update_scope_summary() -> None:
                     selected = selected_projects()
@@ -261,13 +273,30 @@ def render_intelligence(state: AppState) -> None:
                     ui.notify("Selected upload bundle created", type="positive")
                     open_path(result.bundle_path)
 
+                def do_evidence_pack() -> None:
+                    filtered = current_filtered_evidence()
+                    if not filtered:
+                        ui.notify("No evidence to pack for current filter", type="warning")
+                        return
+                    result = create_topic_evidence_pack(
+                        filtered,
+                        state.downloads_dir,
+                        topic_select.value or "All topics",
+                        project_select.value or "All projects",
+                        focus.value or "",
+                    )
+                    last_evidence_pack["path"] = result.pack_path
+                    open_evidence_pack_btn.enable()
+                    ui.notify(f"Evidence pack created: {result.evidence_count} items", type="positive")
+                    open_path(result.pack_path)
+
                 def do_export_matrix() -> None:
                     path = export_topic_matrix(topic_rows, state.downloads_dir)
                     ui.notify(f"Exported: {path}", type="positive")
                     open_path(path)
 
                 def do_export_evidence() -> None:
-                    filtered = filter_topic_evidence(topic_evidence, topic_select.value or "All topics", project_select.value or "All projects")
+                    filtered = current_filtered_evidence()
                     path = export_topic_evidence(filtered, state.downloads_dir)
                     ui.notify(f"Exported: {path}", type="positive")
                     open_path(path)
@@ -276,7 +305,9 @@ def render_intelligence(state: AppState) -> None:
                 copy_btn.on("click", do_copy)
                 save_btn.on("click", do_save)
                 create_bundle_btn.on("click", do_bundle)
+                create_evidence_pack_btn.on("click", do_evidence_pack)
                 open_bundle_btn.on("click", lambda: open_path(last_bundle["path"]) if last_bundle["path"] else None)
+                open_evidence_pack_btn.on("click", lambda: open_path(last_evidence_pack["path"]) if last_evidence_pack["path"] else None)
                 export_matrix_btn.on("click", do_export_matrix)
                 export_evidence_btn.on("click", do_export_evidence)
                 preset_select.on("update:model-value", lambda e: apply_preset())
