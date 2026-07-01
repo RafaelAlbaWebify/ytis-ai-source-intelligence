@@ -4,6 +4,8 @@ from pathlib import Path
 from nicegui import ui
 
 from ytis.core.analysis_inbox import (
+    CHAIN_STEP_LABELS,
+    CHAIN_STEP_OPTIONS,
     FOCUS_OPTIONS,
     TOPIC_OPTIONS,
     analysis_stats,
@@ -15,6 +17,7 @@ from ytis.core.analysis_inbox import (
     read_analysis,
     save_analysis,
 )
+from ytis.core.missions import list_missions
 from ytis.core.project_hygiene import audit_projects
 from ytis.ui.components import open_path
 from ytis.ui.layout import render_shell
@@ -52,6 +55,11 @@ def render_analysis_inbox(state: AppState) -> None:
     downloads_dir = _downloads_dir(state)
     projects = audit_projects(state.load_projects())
     project_names = [val(p, "name", "Unnamed") for p in projects]
+    missions = list_missions(project_root)
+    mission_options = {"No mission": ""}
+    for mission in missions:
+        mission_options[f"{mission.name} ({mission.mission_id[:15]})"] = mission.mission_id
+
     records = list_analyses(project_root)
     stats = analysis_stats(records)
 
@@ -61,19 +69,20 @@ def render_analysis_inbox(state: AppState) -> None:
                 ui.label("Analysis Inbox").classes("text-3xl font-bold")
                 ui.label("Save, browse, export, and continue ChatGPT results inside YTIS").classes("text-sm text-slate-300")
             with ui.row().classes("gap-2"):
+                ui.button("Missions", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline")
                 ui.button("Intelligence", icon="hub", on_click=lambda: ui.navigate.to("/intelligence")).props("outline")
                 ui.button("Open Results Folder", icon="folder_open", on_click=lambda: open_path(project_root / "analysis_results"), color="primary")
 
         with ui.grid(columns=5).classes("w-full gap-3"):
             _metric("Saved analyses", str(stats["records"]), "ChatGPT results")
+            _metric("Missions", str(stats["missions"]), "linked")
             _metric("Projects", str(stats["projects"]), "covered")
             _metric("Topics", str(stats["topics"]), "covered")
-            _metric("Focus presets", str(stats["focus_presets"]), "used")
             _metric("Words", f'{stats["words"]:,}', "saved analysis")
 
         with ui.expansion("Save New ChatGPT Analysis", icon="save", value=True).classes("ytis-card w-full text-white").props("expand-separator dense"):
             with ui.column().classes("p-4 gap-3"):
-                ui.label("After ChatGPT analyzes a YTIS bundle or evidence pack, paste the answer here and save it into the local research library.").classes("text-sm text-slate-400")
+                ui.label("After ChatGPT analyzes a mission bundle or prompt-chain step, paste the answer here and link it to the mission/step.").classes("text-sm text-slate-400")
 
                 with ui.grid(columns=2).classes("w-full gap-3"):
                     title_input = ui.input("Analysis title", value="").classes("w-full")
@@ -81,6 +90,9 @@ def render_analysis_inbox(state: AppState) -> None:
                 with ui.grid(columns=2).classes("w-full gap-3"):
                     topic_select = ui.select(TOPIC_OPTIONS, value="All topics", label="Topic").classes("w-full")
                     project_select = ui.select(project_names, value=project_names[:1] if project_names else [], multiple=True, label="Related projects").classes("w-full")
+                with ui.grid(columns=2).classes("w-full gap-3"):
+                    mission_select = ui.select(list(mission_options.keys()), value="No mission", label="Related mission").classes("w-full")
+                    chain_step_select = ui.select(CHAIN_STEP_OPTIONS, value="Unassigned", label="Prompt-chain step").classes("w-full")
                 with ui.grid(columns=2).classes("w-full gap-3"):
                     source_bundle = ui.input("Source bundle filename/path", value="").classes("w-full")
                     source_evidence = ui.input("Source evidence pack filename/path", value="").classes("w-full")
@@ -93,10 +105,22 @@ def render_analysis_inbox(state: AppState) -> None:
                     save_btn = ui.button("Save Analysis", icon="save", color="primary")
                     clear_btn = ui.button("Clear Form", icon="backspace").props("outline")
 
+                def selected_mission_name() -> str:
+                    label = mission_select.value or "No mission"
+                    mission_id = mission_options.get(label, "")
+                    for mission in missions:
+                        if mission.mission_id == mission_id:
+                            return mission.name
+                    return ""
+
                 def do_clear() -> None:
                     for element in [title_input, source_bundle, source_evidence, notes, analysis_text]:
                         element.value = ""
                         element.update()
+                    mission_select.value = "No mission"
+                    chain_step_select.value = "Unassigned"
+                    mission_select.update()
+                    chain_step_select.update()
                     save_status.text = "Form cleared"
                     save_status.update()
 
@@ -109,6 +133,8 @@ def render_analysis_inbox(state: AppState) -> None:
                     if isinstance(selected_projects, str):
                         selected_projects = [selected_projects]
                     title = title_input.value or f"{focus_select.value} - {topic_select.value}"
+                    mission_label = mission_select.value or "No mission"
+                    mission_id = mission_options.get(mission_label, "")
                     record = save_analysis(
                         project_root=project_root,
                         title=title,
@@ -119,16 +145,19 @@ def render_analysis_inbox(state: AppState) -> None:
                         source_bundle=source_bundle.value or "",
                         source_evidence_pack=source_evidence.value or "",
                         notes=notes.value or "",
+                        mission_id=mission_id,
+                        mission_name=selected_mission_name(),
+                        chain_step=chain_step_select.value or "Unassigned",
                     )
                     save_status.text = f"Saved: {record.record_id}"
                     save_status.update()
-                    ui.notify("Analysis saved", type="positive")
+                    ui.notify("Analysis saved and linked", type="positive")
                     open_path(record.analysis_path)
 
                 save_btn.on("click", do_save)
                 clear_btn.on("click", do_clear)
 
-        with ui.expansion("Analysis Coverage", icon="checklist", value=True).classes("ytis-card w-full text-white").props("expand-separator dense"):
+        with ui.expansion("Analysis Coverage", icon="checklist", value=False).classes("ytis-card w-full text-white").props("expand-separator dense"):
             with ui.column().classes("p-4 gap-3"):
                 ui.label("Shows which project/topic combinations already have saved ChatGPT analysis. Counts are based on saved metadata.").classes("text-sm text-slate-400")
                 rows = coverage_rows(records, project_names)
@@ -152,7 +181,9 @@ def render_analysis_inbox(state: AppState) -> None:
                 filter_project = ui.select(["All projects"] + project_names, value="All projects", label="Project").classes("flex-1")
                 filter_topic = ui.select(["All topics"] + [t for t in TOPIC_OPTIONS if t != "All topics"], value="All topics", label="Topic").classes("flex-1")
                 filter_focus = ui.select(["All focus presets"] + FOCUS_OPTIONS, value="All focus presets", label="Focus").classes("flex-1")
-                search_text = ui.input("Search saved analyses").classes("flex-1")
+                filter_mission = ui.select(["All missions"] + list(mission_options.keys())[1:], value="All missions", label="Mission").classes("flex-1")
+                filter_step = ui.select(["All steps"] + CHAIN_STEP_OPTIONS, value="All steps", label="Step").classes("flex-1")
+            search_text = ui.input("Search saved analyses").classes("w-full")
 
             with ui.row().classes("gap-2"):
                 export_filtered_btn = ui.button("Export Filtered Analyses ZIP", icon="archive", color="primary")
@@ -163,12 +194,17 @@ def render_analysis_inbox(state: AppState) -> None:
 
             def current_filtered_records():
                 current_records = list_analyses(project_root)
+                mission_value = "All missions"
+                if filter_mission.value and filter_mission.value != "All missions":
+                    mission_value = mission_options.get(filter_mission.value, "")
                 return filter_analyses(
                     current_records,
                     project=filter_project.value or "All projects",
                     topic=filter_topic.value or "All topics",
                     focus=filter_focus.value or "All focus presets",
                     text=search_text.value or "",
+                    mission_id=mission_value,
+                    chain_step=filter_step.value or "All steps",
                 )
 
             def show_preview(record) -> None:
@@ -208,7 +244,10 @@ def render_analysis_inbox(state: AppState) -> None:
                             with ui.row().classes("w-full justify-between items-start gap-3"):
                                 with ui.column().classes("gap-1 flex-1"):
                                     ui.label(record.title).classes("font-bold text-lg")
+                                    step_label = CHAIN_STEP_LABELS.get(record.chain_step, record.chain_step)
                                     ui.label(f"{record.created_at} | {record.topic} | {record.focus_preset} | {record.word_count:,} words").classes("text-xs text-slate-400")
+                                    if record.mission_name:
+                                        ui.label(f"Mission: {record.mission_name} | {step_label}").classes("text-xs text-green-300")
                                     ui.label("Projects: " + (", ".join(record.projects) if record.projects else "-")).classes("text-xs text-blue-300")
                                     ui.label(record.summary or "(no summary)").classes("text-sm text-slate-300")
                                 with ui.column().classes("gap-1"):
@@ -226,7 +265,7 @@ def render_analysis_inbox(state: AppState) -> None:
                 ui.notify(f"Exported {len(filtered)} analyses", type="positive")
                 open_path(path)
 
-            for element in [filter_project, filter_topic, filter_focus, search_text]:
+            for element in [filter_project, filter_topic, filter_focus, filter_mission, filter_step, search_text]:
                 element.on("update:model-value", lambda e: render_results())
             refresh_btn.on("click", lambda: render_results())
             export_filtered_btn.on("click", do_export_filtered)

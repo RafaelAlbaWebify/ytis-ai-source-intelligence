@@ -3,6 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from nicegui import ui
 
+from ytis.core.analysis_inbox import (
+    CHAIN_STEP_LABELS,
+    CHAIN_STEP_OPTIONS,
+    list_analyses,
+    mission_analysis_records,
+    mission_chain_progress,
+)
 from ytis.core.missions import (
     MISSION_FOCUS_OPTIONS,
     MISSION_TEMPLATES,
@@ -22,14 +29,17 @@ from ytis.ui.components import open_path
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, val
 
+
 def _project_root(state: AppState) -> Path:
     return Path(getattr(state, "project_root", "") or Path.cwd())
+
 
 def _downloads_dir(state: AppState) -> Path:
     value = getattr(state, "downloads_dir", None)
     if value:
         return Path(value)
     return Path.home() / "Downloads"
+
 
 def _metric(title: str, value: str, caption: str = ""):
     value_label = None
@@ -40,9 +50,11 @@ def _metric(title: str, value: str, caption: str = ""):
             ui.label(caption).classes("text-xs text-slate-500")
     return value_label
 
+
 def _copy_to_clipboard(text: str) -> None:
     safe = text.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
     ui.run_javascript(f"navigator.clipboard.writeText(`{safe}`)")
+
 
 def render_missions(state: AppState) -> None:
     render_shell(state, "/missions")
@@ -58,7 +70,7 @@ def render_missions(state: AppState) -> None:
         with ui.row().classes("w-full justify-between items-center"):
             with ui.column().classes("gap-0"):
                 ui.label("Study Missions").classes("text-3xl font-bold")
-                ui.label("Goal-based research with bundles, prompt chains, and saved ChatGPT analysis").classes("text-sm text-slate-300")
+                ui.label("Goal-based research with bundles, prompt chains, and linked ChatGPT analyses").classes("text-sm text-slate-300")
             with ui.row().classes("gap-2"):
                 ui.button("Intelligence", icon="hub", on_click=lambda: ui.navigate.to("/intelligence")).props("outline")
                 ui.button("Analysis Inbox", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox")).props("outline")
@@ -134,7 +146,7 @@ def render_missions(state: AppState) -> None:
 
         with ui.card().classes("ytis-card p-5 w-full"):
             ui.label("Mission Library").classes("text-xl font-bold")
-            ui.label("Create mission bundles, staged prompt chains, and track mission status.").classes("text-sm text-slate-400")
+            ui.label("Create mission bundles, staged prompt chains, and track linked ChatGPT analyses.").classes("text-sm text-slate-400")
             missions_container = ui.column().classes("w-full gap-2")
 
             def show_prompt(mission) -> None:
@@ -163,6 +175,27 @@ def render_missions(state: AppState) -> None:
                         ui.button("Copy All Steps", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Prompt chain copied", type="positive")), color="primary")
                 dialog.open()
 
+            def show_linked_analyses(mission) -> None:
+                records = mission_analysis_records(list_analyses(project_root), mission.mission_id)
+                with ui.dialog() as dialog, ui.card().classes("bg-slate-900 text-white").style("width: 950px; max-width: 95vw;"):
+                    ui.label("Linked Mission Analyses").classes("text-xl font-bold")
+                    ui.label(mission.name).classes("text-sm text-slate-400")
+                    if not records:
+                        ui.label("No analyses linked to this mission yet. Save one from Analysis Inbox.").classes("text-slate-400")
+                    else:
+                        for record in records:
+                            with ui.card().classes("ytis-mini-card p-3 w-full"):
+                                ui.label(record.title).classes("font-bold")
+                                ui.label(f"{record.created_at} | {CHAIN_STEP_LABELS.get(record.chain_step, record.chain_step)} | {record.word_count:,} words").classes("text-xs text-slate-400")
+                                ui.label(record.summary).classes("text-sm text-slate-300")
+                                with ui.row().classes("gap-2"):
+                                    ui.button("Open MD", icon="article", on_click=lambda p=record.analysis_path: open_path(p)).props("outline dense")
+                                    ui.button("Open Folder", icon="folder", on_click=lambda p=record.folder: open_path(p)).props("outline dense")
+                    with ui.row().classes("justify-end w-full"):
+                        ui.button("Close", on_click=dialog.close).props("outline")
+                        ui.button("Analysis Inbox", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox"), color="primary")
+                dialog.open()
+
             def do_bundle(mission) -> None:
                 result = create_mission_bundle(mission, projects, downloads_dir)
                 ui.notify(f"Mission bundle created with {len(result.included_zips)} packs", type="positive")
@@ -179,25 +212,40 @@ def render_missions(state: AppState) -> None:
                 refresh_metrics()
                 render_missions_list()
 
+            def render_progress(progress: dict[str, int]) -> None:
+                with ui.row().classes("gap-2 flex-wrap"):
+                    for step in CHAIN_STEP_OPTIONS:
+                        if step == "Unassigned":
+                            continue
+                        done = progress.get(step, 0) > 0
+                        label = CHAIN_STEP_LABELS.get(step, step)
+                        ui.badge(("Done: " if done else "Pending: ") + label).props("color=green" if done else "color=grey")
+                    if progress.get("Unassigned", 0):
+                        ui.badge(f"Unassigned: {progress['Unassigned']}").props("color=orange")
+
             def render_missions_list() -> None:
                 missions_container.clear()
                 current_missions = list_missions(project_root)
+                all_records = list_analyses(project_root)
                 with missions_container:
                     if not current_missions:
                         ui.label("No missions yet. Create one above.").classes("text-slate-400")
                         return
                     for mission in current_missions:
                         selected_projects = selected_project_records(mission, projects)
+                        progress = mission_chain_progress(all_records, mission.mission_id)
                         with ui.card().classes("ytis-mini-card p-4 w-full"):
                             with ui.row().classes("w-full justify-between items-start gap-3"):
-                                with ui.column().classes("gap-1 flex-1"):
+                                with ui.column().classes("gap-2 flex-1"):
                                     ui.label(mission.name).classes("font-bold text-lg")
                                     ui.label(f"{mission.status.upper()} | {mission.focus_preset} | {mission.created_at}").classes("text-xs text-slate-400")
                                     ui.label("Projects: " + (", ".join(mission.projects) if mission.projects else "-")).classes("text-xs text-blue-300")
                                     ui.label("Topics: " + (", ".join(mission.topics) if mission.topics else "-")).classes("text-xs text-green-300")
                                     ui.label(mission.goal or "(no goal)").classes("text-sm text-slate-300")
-                                    ui.label(f"Selected project records available: {len(selected_projects)}").classes("text-xs text-slate-500")
+                                    ui.label(f"Linked analyses: {progress.get('Total', 0)} | Selected project records available: {len(selected_projects)}").classes("text-xs text-slate-500")
+                                    render_progress(progress)
                                 with ui.column().classes("gap-1"):
+                                    ui.button("Linked Analyses", icon="link", on_click=lambda m=mission: show_linked_analyses(m)).props("outline dense")
                                     ui.button("Create Bundle", icon="archive", on_click=lambda m=mission: do_bundle(m)).props("outline dense")
                                     ui.button("Create Chain ZIP", icon="account_tree", on_click=lambda m=mission: do_chain_pack(m)).props("outline dense")
                                     ui.button("View Chain", icon="schema", on_click=lambda m=mission: show_chain(m)).props("outline dense")

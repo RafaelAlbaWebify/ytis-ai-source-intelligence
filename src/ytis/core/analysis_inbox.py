@@ -46,6 +46,23 @@ TRACKED_TOPICS = [
     "Webify service ideas",
 ]
 
+CHAIN_STEP_OPTIONS = [
+    "Unassigned",
+    "STEP_01_extract_map",
+    "STEP_02_compare_patterns",
+    "STEP_03_extract_workflows",
+    "STEP_04_apply_to_rafael_webify",
+    "STEP_05_validation_plan",
+]
+
+CHAIN_STEP_LABELS = {
+    "STEP_01_extract_map": "Step 1 - Extract and map",
+    "STEP_02_compare_patterns": "Step 2 - Compare patterns",
+    "STEP_03_extract_workflows": "Step 3 - Extract workflows",
+    "STEP_04_apply_to_rafael_webify": "Step 4 - Apply to Rafael/Webify",
+    "STEP_05_validation_plan": "Step 5 - Validation plan",
+}
+
 
 @dataclass
 class AnalysisRecord:
@@ -57,6 +74,9 @@ class AnalysisRecord:
     focus_preset: str
     source_bundle: str
     source_evidence_pack: str
+    mission_id: str
+    mission_name: str
+    chain_step: str
     folder: Path
     analysis_path: Path
     metadata_path: Path
@@ -97,6 +117,9 @@ def save_analysis(
     source_bundle: str = "",
     source_evidence_pack: str = "",
     notes: str = "",
+    mission_id: str = "",
+    mission_name: str = "",
+    chain_step: str = "Unassigned",
 ) -> AnalysisRecord:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -115,6 +138,11 @@ def save_analysis(
     md += f"Projects: {', '.join(projects) if projects else '-'}\n\n"
     md += f"Topic: {topic or '-'}\n\n"
     md += f"Focus preset: {focus_preset or '-'}\n\n"
+    if mission_name or mission_id:
+        md += f"Mission: {mission_name or '-'}\n\n"
+        md += f"Mission ID: `{mission_id or '-'}`\n\n"
+    if chain_step and chain_step != "Unassigned":
+        md += f"Prompt-chain step: {CHAIN_STEP_LABELS.get(chain_step, chain_step)}\n\n"
     if source_bundle:
         md += f"Source bundle: `{source_bundle}`\n\n"
     if source_evidence_pack:
@@ -133,6 +161,9 @@ def save_analysis(
         "focus_preset": focus_preset,
         "source_bundle": source_bundle,
         "source_evidence_pack": source_evidence_pack,
+        "mission_id": mission_id,
+        "mission_name": mission_name,
+        "chain_step": chain_step,
         "analysis_path": str(analysis_path),
         "notes_path": str(notes_path),
         "word_count": _word_count(body),
@@ -152,6 +183,9 @@ def _record_from_data(folder: Path, data: dict[str, Any]) -> AnalysisRecord:
         focus_preset=str(data.get("focus_preset") or ""),
         source_bundle=str(data.get("source_bundle") or ""),
         source_evidence_pack=str(data.get("source_evidence_pack") or ""),
+        mission_id=str(data.get("mission_id") or ""),
+        mission_name=str(data.get("mission_name") or ""),
+        chain_step=str(data.get("chain_step") or "Unassigned"),
         folder=folder,
         analysis_path=folder / "analysis.md",
         metadata_path=folder / "metadata.json",
@@ -189,6 +223,8 @@ def filter_analyses(
     topic: str = "All topics",
     focus: str = "All focus presets",
     text: str = "",
+    mission_id: str = "All missions",
+    chain_step: str = "All steps",
 ) -> list[AnalysisRecord]:
     result = records
     if project and project != "All projects":
@@ -197,6 +233,10 @@ def filter_analyses(
         result = [r for r in result if r.topic == topic]
     if focus and focus != "All focus presets":
         result = [r for r in result if r.focus_preset == focus]
+    if mission_id and mission_id != "All missions":
+        result = [r for r in result if r.mission_id == mission_id]
+    if chain_step and chain_step != "All steps":
+        result = [r for r in result if r.chain_step == chain_step]
     if text.strip():
         q = text.lower().strip()
         result = [
@@ -206,6 +246,8 @@ def filter_analyses(
             or q in " ".join(r.projects).lower()
             or q in r.topic.lower()
             or q in r.focus_preset.lower()
+            or q in r.mission_name.lower()
+            or q in r.chain_step.lower()
         ]
     return result
 
@@ -221,11 +263,13 @@ def analysis_stats(records: list[AnalysisRecord]) -> dict[str, Any]:
     projects = sorted({p for r in records for p in r.projects})
     topics = sorted({r.topic for r in records if r.topic})
     focus = sorted({r.focus_preset for r in records if r.focus_preset})
+    missions = sorted({r.mission_id for r in records if r.mission_id})
     return {
         "records": len(records),
         "projects": len(projects),
         "topics": len(topics),
         "focus_presets": len(focus),
+        "missions": len(missions),
         "words": sum(r.word_count for r in records),
     }
 
@@ -250,6 +294,22 @@ def coverage_rows(records: list[AnalysisRecord], project_names: list[str]) -> li
     return rows
 
 
+def mission_chain_progress(records: list[AnalysisRecord], mission_id: str) -> dict[str, int]:
+    linked = [r for r in records if r.mission_id == mission_id]
+    progress: dict[str, int] = {}
+    for step in CHAIN_STEP_OPTIONS:
+        if step == "Unassigned":
+            continue
+        progress[step] = sum(1 for r in linked if r.chain_step == step)
+    progress["Unassigned"] = sum(1 for r in linked if not r.chain_step or r.chain_step == "Unassigned")
+    progress["Total"] = len(linked)
+    return progress
+
+
+def mission_analysis_records(records: list[AnalysisRecord], mission_id: str) -> list[AnalysisRecord]:
+    return [r for r in records if r.mission_id == mission_id]
+
+
 def generate_continue_prompt(record: AnalysisRecord) -> str:
     analysis = read_analysis(record)
     return f"""# Continue YTIS Analysis
@@ -262,6 +322,8 @@ Saved analysis metadata:
 - Projects: {', '.join(record.projects) if record.projects else '-'}
 - Topic: {record.topic or '-'}
 - Focus preset: {record.focus_preset or '-'}
+- Mission: {record.mission_name or '-'}
+- Chain step: {CHAIN_STEP_LABELS.get(record.chain_step, record.chain_step) if record.chain_step else '-'}
 - Source bundle: {record.source_bundle or '-'}
 - Source evidence pack: {record.source_evidence_pack or '-'}
 
@@ -302,6 +364,9 @@ def export_analyses_zip(records: list[AnalysisRecord], downloads_dir: Path, name
                 "projects": record.projects,
                 "topic": record.topic,
                 "focus_preset": record.focus_preset,
+                "mission_id": record.mission_id,
+                "mission_name": record.mission_name,
+                "chain_step": record.chain_step,
                 "word_count": record.word_count,
                 "summary": record.summary,
             })
