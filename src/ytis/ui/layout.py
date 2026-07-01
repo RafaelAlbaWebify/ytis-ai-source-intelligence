@@ -11,6 +11,7 @@ NAV_ITEMS = [
     ("Build Pack", "/build", "rocket_launch"),
     ("Projects", "/projects", "folder"),
     ("Search", "/search", "search"),
+    ("Viewer", "/viewer", "article"),
     ("Analyze", "/analyze", "psychology"),
     ("Inspect", "/inspect", "inventory_2"),
     ("Health", "/health", "health_and_safety"),
@@ -69,6 +70,7 @@ def register_pages(app_version: str) -> None:
     from ytis.ui.pages_inspect import render_inspect
     from ytis.ui.pages_projects import render_projects
     from ytis.ui.pages_search import render_search
+    from ytis.ui.pages_viewer import render_viewer
 
     state = AppState(app_version=app_version)
 
@@ -87,6 +89,10 @@ def register_pages(app_version: str) -> None:
     @ui.page("/search")
     def search_page() -> None:
         render_search(state)
+
+    @ui.page("/viewer")
+    def viewer_page() -> None:
+        render_viewer(state)
 
     @ui.page("/analyze")
     def analyze_page() -> None:

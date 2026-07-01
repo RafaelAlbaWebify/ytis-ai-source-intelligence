@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from nicegui import ui
 
 from ytis.core.transcript_search import SearchResult, export_results, search_transcripts
@@ -23,7 +21,7 @@ def render_search(state: AppState) -> None:
             with ui.column().classes("gap-0"):
                 ui.label("Search Transcripts").classes("text-3xl font-bold")
                 ui.label("Search across clean TXT transcript files with snippets and exportable results").classes("text-sm text-slate-300")
-            ui.button("Build New Pack", icon="add", on_click=lambda: ui.navigate.to("/build"), color="primary")
+            ui.button("Open Viewer", icon="article", on_click=lambda: ui.navigate.to("/viewer"), color="primary")
 
         with ui.grid(columns=3).classes("w-full gap-4"):
             with ui.card().classes("ytis-card p-5 w-full").style("grid-column: span 2;"):
@@ -74,7 +72,9 @@ def render_search(state: AppState) -> None:
                                 ui.label(result.file_name).classes("font-bold")
                                 ui.label(f"{result.project} | video id: {result.video_id or '-'} | matches: {result.match_count}").classes("text-xs text-blue-300")
                                 ui.label(result.snippet).classes("text-sm text-slate-300")
-                            ui.button("Open TXT", icon="description", on_click=lambda p=result.file_path: open_path(p)).props("outline dense")
+                            with ui.column().classes("gap-2"):
+                                ui.button("Viewer", icon="article", on_click=lambda: ui.navigate.to("/viewer")).props("outline dense")
+                                ui.button("Open TXT", icon="description", on_click=lambda p=result.file_path: open_path(p)).props("outline dense")
 
         def run_search() -> None:
             nonlocal last_results
