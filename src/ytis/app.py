@@ -3,7 +3,7 @@ from __future__ import annotations
 from nicegui import ui
 from ytis.ui.layout import register_pages
 
-APP_VERSION = "v0.5.2"
+APP_VERSION = "v0.5.3"
 
 def main() -> None:
     register_pages(app_version=APP_VERSION)

@@ -13,15 +13,15 @@ from typing import Any
 TOPIC_KEYWORDS: dict[str, list[str]] = {
     "Pricing": ["pricing", "price", "prices", "charge", "charging", "fee", "fees", "retainer", "budget", "quote", "proposal"],
     "Offer": ["offer", "offers", "guarantee", "guaranteed", "package", "positioning", "promise", "value proposition"],
-    "Lead generation": ["lead generation", "leads", "prospects", "prospecting", "appointments", "booked", "pipeline", "demand"],
-    "Sales call": ["sales call", "discovery call", "call", "closing", "close", "sales process", "objection", "objections"],
-    "Cold email": ["cold email", "email outreach", "outreach", "cold outreach", "inbox", "reply", "sequence"],
+    "Lead generation": ["lead generation", "qualified lead", "qualified leads", "leads", "prospects", "prospecting", "appointments", "pipeline"],
+    "Sales call": ["sales call", "discovery call", "strategy call", "closing call", "sales process", "objection", "objections", "close the deal", "closing"],
+    "Cold email": ["cold email", "email outreach", "outreach", "cold outreach", "inbox", "reply rate", "sequence"],
     "Funnel": ["funnel", "funnels", "landing page", "opt-in", "conversion", "webinar", "lead magnet"],
     "Agency": ["agency", "agencies", "client work", "done for you", "service business"],
-    "MSP": ["msp", "managed service", "managed services", "it services", "it support", "technology company"],
-    "Niche": ["niche", "vertical", "industry", "market", "target market", "specialize", "specialise"],
+    "MSP": ["msp", "managed service", "managed services", "it services", "it support", "technology company", "technology companies"],
+    "Niche": ["niche", "vertical", "target market", "specialize", "specialise", "industry specific"],
     "Onboarding": ["onboarding", "onboard", "client onboarding", "handoff", "kickoff", "implementation"],
-    "Content": ["content", "youtube", "linkedin", "post", "posts", "personal brand", "social media"],
+    "Content": ["content marketing", "content", "youtube", "linkedin", "personal brand", "social media"],
     "Ads": ["ads", "advertising", "google ads", "facebook ads", "paid ads", "campaign", "ad spend"],
     "Workflow": ["workflow", "process", "system", "sop", "framework", "steps", "checklist", "automation"],
 }
@@ -121,6 +121,14 @@ def _clean_txt_files(project: dict[str, Any]) -> list[Path]:
     return sorted(clean_dir.glob("*.txt"))
 
 
+def _count_keyword(text_lower: str, keyword: str) -> int:
+    # Word-boundary matching reduces false positives for small terms.
+    escaped = re.escape(keyword.lower())
+    if " " in keyword:
+        return len(re.findall(escaped, text_lower))
+    return len(re.findall(rf"\b{escaped}\b", text_lower))
+
+
 def _snippet(text: str, keyword: str, radius: int = 150) -> str:
     lower = text.lower()
     idx = lower.find(keyword.lower())
@@ -153,12 +161,14 @@ def scan_topic_matrix(projects: list[dict[str, Any]]) -> tuple[list[dict[str, An
             for topic, keywords in TOPIC_KEYWORDS.items():
                 count = 0
                 best_keyword = ""
+                best_keyword_hits = 0
                 for keyword in keywords:
-                    hits = lower.count(keyword.lower())
+                    hits = _count_keyword(lower, keyword)
                     if hits:
                         count += hits
-                        if not best_keyword:
+                        if hits > best_keyword_hits:
                             best_keyword = keyword
+                            best_keyword_hits = hits
                 if count:
                     matrix[topic][project_name] = matrix[topic].get(project_name, 0) + count
                     evidence.append(
@@ -193,6 +203,15 @@ def scan_topic_matrix(projects: list[dict[str, Any]]) -> tuple[list[dict[str, An
     return rows, evidence
 
 
+def filter_topic_evidence(evidence: list[TopicHit], topic: str = "All topics", project: str = "All projects") -> list[TopicHit]:
+    filtered = evidence
+    if topic and topic != "All topics":
+        filtered = [item for item in filtered if item.topic == topic]
+    if project and project != "All projects":
+        filtered = [item for item in filtered if item.project == project]
+    return filtered
+
+
 def export_topic_matrix(matrix_rows: list[dict[str, Any]], downloads_dir: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = downloads_dir / f"YTIS_TOPIC_MATRIX_{stamp}.csv"
@@ -213,14 +232,7 @@ def export_topic_evidence(evidence: list[TopicHit], downloads_dir: Path) -> Path
         writer = csv.DictWriter(fh, fieldnames=["project", "topic", "file_name", "file_path", "matches", "snippet"])
         writer.writeheader()
         for item in evidence:
-            writer.writerow({
-                "project": item.project,
-                "topic": item.topic,
-                "file_name": item.file_name,
-                "file_path": item.file_path,
-                "matches": item.matches,
-                "snippet": item.snippet,
-            })
+            writer.writerow(item.__dict__)
     return path
 
 
