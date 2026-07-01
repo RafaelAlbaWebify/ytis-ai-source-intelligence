@@ -130,10 +130,10 @@ def render_dashboard(state: AppState) -> None:
 
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Analysis Shortcuts").classes("text-xl font-bold")
-                ui.button("Generate upload prompt", icon="content_copy").props("outline disable").classes("w-full")
-                ui.button("Business lessons prompt", icon="psychology").props("outline disable").classes("w-full")
-                ui.button("Workflow extraction prompt", icon="account_tree").props("outline disable").classes("w-full")
-                ui.label("Prompt generation is planned for v0.3.5.").classes("text-xs text-blue-300 mt-2")
+                ui.button("Generate upload prompt", icon="content_copy", on_click=lambda: ui.navigate.to("/analyze")).props("outline").classes("w-full")
+                ui.button("Business lessons prompt", icon="psychology", on_click=lambda: ui.navigate.to("/analyze")).props("outline").classes("w-full")
+                ui.button("Workflow extraction prompt", icon="account_tree", on_click=lambda: ui.navigate.to("/analyze")).props("outline").classes("w-full")
+                ui.label("Prompt generator is now available in Analyze.").classes("text-xs text-blue-300 mt-2")
 
             health_card(state.app_version, compact=True)
 

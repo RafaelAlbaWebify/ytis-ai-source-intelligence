@@ -11,6 +11,7 @@ NAV_ITEMS = [
     ("Build Pack", "/build", "rocket_launch"),
     ("Projects", "/projects", "folder"),
     ("Search", "/search", "search"),
+    ("Analyze", "/analyze", "psychology"),
     ("Health", "/health", "health_and_safety"),
 ]
 
@@ -60,6 +61,7 @@ def render_shell(state: AppState, active: str) -> None:
 
 
 def register_pages(app_version: str) -> None:
+    from ytis.ui.pages_analyze import render_analyze
     from ytis.ui.pages_build import render_build
     from ytis.ui.pages_dashboard import render_dashboard
     from ytis.ui.pages_health import render_health
@@ -83,6 +85,10 @@ def register_pages(app_version: str) -> None:
     @ui.page("/search")
     def search_page() -> None:
         render_search(state)
+
+    @ui.page("/analyze")
+    def analyze_page() -> None:
+        render_analyze(state)
 
     @ui.page("/health")
     def health_page() -> None:
