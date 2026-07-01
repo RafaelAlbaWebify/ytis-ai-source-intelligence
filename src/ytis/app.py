@@ -5,7 +5,7 @@ from nicegui import ui
 from ytis.ui.layout import register_pages
 
 
-APP_VERSION = "v0.3.9"
+APP_VERSION = "v0.4.0"
 
 
 def main() -> None:
