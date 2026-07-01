@@ -16,6 +16,14 @@ def _status_color(status: str) -> str:
     return "text-red-400"
 
 
+def _preview_color(status: str) -> str:
+    if status == "included":
+        return "text-green-400"
+    if status in {"project-only", "zip-only"}:
+        return "text-yellow-400"
+    return "text-red-400"
+
+
 def render_inspect(state: AppState) -> None:
     render_shell(state, "/inspect")
 
@@ -55,7 +63,7 @@ def render_inspect(state: AppState) -> None:
 
                 report = inspect_pack(project)
 
-                with ui.grid(columns=4).classes("w-full gap-3"):
+                with ui.grid(columns=5).classes("w-full gap-3"):
                     with ui.card().classes("ytis-metric p-4"):
                         ui.label("Status").classes("text-sm text-slate-400")
                         ui.label(report.status.upper()).classes(f"text-2xl font-bold {_status_color(report.status)}")
@@ -68,6 +76,9 @@ def render_inspect(state: AppState) -> None:
                     with ui.card().classes("ytis-metric p-4"):
                         ui.label("TXT / SRT").classes("text-sm text-slate-400")
                         ui.label(f"{report.clean_txt_count} / {report.raw_srt_count}").classes("text-2xl font-bold")
+                    with ui.card().classes("ytis-metric p-4"):
+                        ui.label("Preview").classes("text-sm text-slate-400")
+                        ui.label(report.preview_status.upper()).classes(f"text-2xl font-bold {_preview_color(report.preview_status)}")
 
                 with ui.grid(columns=2).classes("w-full gap-4"):
                     with ui.card().classes("ytis-card p-5 w-full"):
@@ -84,13 +95,35 @@ def render_inspect(state: AppState) -> None:
                             ui.button("Go to Analyze", icon="psychology", on_click=lambda: ui.navigate.to("/analyze")).props("outline")
 
                     with ui.card().classes("ytis-card p-5 w-full"):
+                        ui.label("Source Preview Validation").classes("text-xl font-bold")
+                        rows = [
+                            ("Project image", "Present" if report.preview_project_image_exists else "Missing"),
+                            ("Project metadata", "Present" if report.preview_project_metadata_exists else "Missing"),
+                            ("ZIP image", "Present" if report.preview_zip_image_exists else "Missing"),
+                            ("ZIP metadata", "Present" if report.preview_zip_metadata_exists else "Missing"),
+                            ("Project image size", f"{report.preview_project_image_size_kb} KB"),
+                            ("ZIP image size", f"{report.preview_zip_image_size_kb} KB"),
+                        ]
+                        for key, value in rows:
+                            good = value not in {"Missing", "0.0 KB"}
+                            with ui.row().classes("w-full justify-between border-b border-slate-800 py-1"):
+                                ui.label(key).classes("text-sm text-slate-300")
+                                ui.label(value).classes("text-sm " + ("text-green-400" if good else "text-red-400"))
+                        if report.preview_title or report.preview_subtitle:
+                            ui.separator().classes("bg-slate-700 my-2")
+                            ui.label(report.preview_title or "-").classes("text-sm font-bold")
+                            ui.label(report.preview_subtitle or "-").classes("text-xs text-slate-400")
+                        if report.preview_project_image_path:
+                            ui.label(report.preview_project_image_path).classes("text-xs text-slate-500 break-all")
+
+                with ui.grid(columns=2).classes("w-full gap-4"):
+                    with ui.card().classes("ytis-card p-5 w-full"):
                         ui.label("Expected Files").classes("text-xl font-bold")
                         for expected, present in report.expected_present.items():
                             with ui.row().classes("w-full justify-between border-b border-slate-800 py-1"):
                                 ui.label(expected).classes("text-sm text-slate-300")
                                 ui.label("Present" if present else "Missing").classes("text-sm " + ("text-green-400" if present else "text-red-400"))
 
-                with ui.grid(columns=2).classes("w-full gap-4"):
                     with ui.card().classes("ytis-card p-5 w-full"):
                         ui.label("File Type Counts").classes("text-xl font-bold")
                         rows = [
@@ -105,14 +138,14 @@ def render_inspect(state: AppState) -> None:
                                 ui.label(key).classes("text-sm text-slate-400")
                                 ui.label(str(value)).classes("text-sm font-bold")
 
-                    with ui.card().classes("ytis-card p-5 w-full"):
-                        ui.label("Largest Files").classes("text-xl font-bold")
-                        if not report.largest_files:
-                            ui.label("No files found.").classes("text-slate-400")
-                        for item in report.largest_files:
-                            with ui.row().classes("w-full justify-between gap-3 border-b border-slate-800 py-1"):
-                                ui.label(str(item["name"])).classes("text-xs text-slate-300 break-all")
-                                ui.label(f'{item["size_mb"]} MB').classes("text-xs text-blue-300")
+                with ui.card().classes("ytis-card p-5 w-full"):
+                    ui.label("Largest Files").classes("text-xl font-bold")
+                    if not report.largest_files:
+                        ui.label("No files found.").classes("text-slate-400")
+                    for item in report.largest_files:
+                        with ui.row().classes("w-full justify-between gap-3 border-b border-slate-800 py-1"):
+                            ui.label(str(item["name"])).classes("text-xs text-slate-300 break-all")
+                            ui.label(f'{item["size_mb"]} MB').classes("text-xs text-blue-300")
 
         selected_project.on("update:model-value", lambda e: render_report())
         render_report()

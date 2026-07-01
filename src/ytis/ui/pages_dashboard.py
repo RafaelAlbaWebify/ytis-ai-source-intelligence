@@ -17,16 +17,18 @@ from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, short_path, val
 
 
-def _next_action(project: dict, status: str, pack_status: str) -> str:
+def _next_action(project: dict, status: str, pack_status: str, preview_status: str) -> str:
     if not project:
         return "No pack exists yet. Build your first research pack."
     if status == "broken":
         return "The current project has hygiene issues. Open Projects and review the status before relying on it."
     if pack_status != "upload-ready":
         return "Inspect the ZIP before upload. The pack inspector found something to review."
+    if preview_status != "included":
+        return "Pack is mostly ready, but source preview is not fully included. Rebuild or inspect the pack."
     if status == "review":
         return "Pack is upload-ready, but project hygiene has minor warnings. Review before relying on it."
-    return "Pack is upload-ready. Next: generate an analysis prompt and upload the ZIP."
+    return "Pack is upload-ready with source preview included. Next: generate an analysis prompt and upload the ZIP."
 
 
 def _find_first_combined_md(project: dict) -> Path | None:
@@ -54,6 +56,7 @@ def render_dashboard(state: AppState) -> None:
     hygiene_status = hygiene.status if hygiene else "none"
     pack_report = inspect_pack(project) if project else None
     pack_status = pack_report.status if pack_report else "none"
+    preview_status = pack_report.preview_status if pack_report else "none"
 
     with ui.column().classes("ytis-page gap-4"):
         page_title("Dashboard", "Command center for YouTube research packs")
@@ -87,13 +90,14 @@ def render_dashboard(state: AppState) -> None:
 
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Next Action").classes("text-xl font-bold")
-                ui.label(_next_action(project, hygiene_status, pack_status)).classes("text-base text-slate-200")
+                ui.label(_next_action(project, hygiene_status, pack_status, preview_status)).classes("text-base text-slate-200")
                 ui.separator().classes("bg-slate-700 my-3")
 
                 ui.label("Pack Inspection").classes("font-bold")
                 if pack_report:
                     color = "text-green-400" if pack_status == "upload-ready" else "text-yellow-400" if pack_status == "review" else "text-red-400"
                     ui.label(pack_status.upper()).classes(f"text-sm font-bold {color}")
+                    ui.label("Preview: " + preview_status.upper()).classes("text-sm text-slate-300")
                     ui.label(pack_report.issue_text()).classes("text-sm text-slate-400")
                     with ui.row().classes("gap-2 mt-2"):
                         ui.button("Inspect Pack", icon="inventory_2", on_click=lambda: ui.navigate.to("/inspect"), color="primary")
