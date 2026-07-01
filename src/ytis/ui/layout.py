@@ -15,6 +15,7 @@ NAV_ITEMS = [
     ("Analyze", "/analyze", "psychology"),
     ("Intelligence", "/intelligence", "hub"),
     ("Analysis Inbox", "/analysis-inbox", "move_to_inbox"),
+    ("Missions", "/missions", "flag"),
 ]
 
 def render_shell(state: AppState, active_path: str) -> None:
@@ -39,26 +40,16 @@ def render_shell(state: AppState, active_path: str) -> None:
             min-width: 220px !important;
             max-width: 220px !important;
         }
-        .ytis-sidebar .q-drawer {
-            width: 220px !important;
-        }
-        .ytis-brand-title {
-            font-size: 22px;
-            font-weight: 800;
-            line-height: 1.1;
-        }
-        .ytis-brand-subtitle {
-            font-size: 11px;
-            color: #94a3b8;
-            line-height: 1.2;
-        }
+        .ytis-sidebar .q-drawer { width: 220px !important; }
+        .ytis-brand-title { font-size: 22px; font-weight: 800; line-height: 1.1; }
+        .ytis-brand-subtitle { font-size: 11px; color: #94a3b8; line-height: 1.2; }
         .ytis-nav-button {
             width: 100%;
             justify-content: flex-start !important;
             text-align: left !important;
             padding-left: 10px !important;
             padding-right: 8px !important;
-            min-height: 36px !important;
+            min-height: 34px !important;
             border-radius: 8px !important;
         }
         .ytis-nav-button .q-btn__content {
@@ -75,13 +66,8 @@ def render_shell(state: AppState, active_path: str) -> None:
             font-size: 12px !important;
             letter-spacing: .02em;
         }
-        .ytis-nav-active {
-            background: #1d4ed8 !important;
-            color: white !important;
-        }
-        .ytis-header {
-            padding-left: 8px;
-        }
+        .ytis-nav-active { background: #1d4ed8 !important; color: white !important; }
+        .ytis-header { padding-left: 8px; }
         </style>
     """)
 
@@ -118,6 +104,7 @@ def register_pages(app_version: str = "") -> None:
     from ytis.ui.pages_health import render_health
     from ytis.ui.pages_analyze import render_analyze
     from ytis.ui.pages_analysis_inbox import render_analysis_inbox
+    from ytis.ui.pages_missions import render_missions
 
     try:
         from ytis.ui.pages_inspector import render_inspector
@@ -185,3 +172,6 @@ def register_pages(app_version: str = "") -> None:
     @ui.page("/analysis-inbox")
     def analysis_inbox_page() -> None:
         render_analysis_inbox(state)
+    @ui.page("/missions")
+    def missions_page() -> None:
+        render_missions(state)
