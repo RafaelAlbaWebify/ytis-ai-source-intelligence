@@ -4,8 +4,10 @@ from nicegui import ui
 
 from ytis.core.analysis_prompts import PROMPT_TEMPLATES, generate_prompt, save_prompt
 from ytis.ui.components import open_path
+from ytis.ui.formatting import compact_number, full_number
 from ytis.ui.layout import render_shell
-from ytis.ui.state import AppState, fmt_int, short_path, val
+from ytis.ui.state import short_path, val
+from ytis.ui.state import AppState
 
 
 def _count_words(text: str) -> int:
@@ -84,18 +86,20 @@ def render_analyze(state: AppState) -> None:
                     return
 
                 rows = [
-                    ("Name", val(project, "name", "-")),
-                    ("Mode", val(project, "build_mode", "-")),
-                    ("Videos", val(project, "videos_found", "0")),
-                    ("Transcripts", val(project, "transcripts_created", "0")),
-                    ("Missing", val(project, "missing_subtitles", "0")),
-                    ("Words", fmt_int(project.get("total_words"))),
-                    ("ZIP", short_path(project.get("zip_path", "-"), 48)),
+                    ("Name", val(project, "name", "-"), ""),
+                    ("Mode", val(project, "build_mode", "-"), ""),
+                    ("Videos", compact_number(project.get("videos_found", 0)), full_number(project.get("videos_found", 0))),
+                    ("Transcripts", compact_number(project.get("transcripts_created", 0)), full_number(project.get("transcripts_created", 0))),
+                    ("Missing", compact_number(project.get("missing_subtitles", 0)), full_number(project.get("missing_subtitles", 0))),
+                    ("Words", compact_number(project.get("total_words", 0)), full_number(project.get("total_words", 0))),
+                    ("ZIP", short_path(project.get("zip_path", "-"), 48), ""),
                 ]
-                for key, value in rows:
+                for key, display_value, full_value in rows:
                     with ui.row().classes("w-full justify-between gap-3 border-b border-slate-800 py-1"):
                         ui.label(key).classes("text-sm text-slate-400")
-                        ui.label(str(value)).classes("text-sm text-right break-all")
+                        label = ui.label(str(display_value)).classes("text-sm text-right break-all")
+                        if full_value:
+                            label.tooltip(full_value)
 
                 zip_path = project.get("zip_path")
                 if zip_path:
@@ -123,7 +127,6 @@ def render_analyze(state: AppState) -> None:
             if not text:
                 ui.notify("Generate a prompt first", type="warning")
                 return
-            # Use JSON-style escaping via a hidden textarea-safe string.
             safe = text.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
             ui.run_javascript(f"navigator.clipboard.writeText(`{safe}`)")
             ui.notify("Prompt copied to clipboard", type="positive")
