@@ -4,6 +4,8 @@ from pathlib import Path
 
 from nicegui import ui
 
+from ytis.core.transcript_search import SearchResult, export_results, search_transcripts
+from ytis.ui.components import open_path
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, val
 
@@ -11,53 +13,99 @@ from ytis.ui.state import AppState, val
 def render_search(state: AppState) -> None:
     render_shell(state, "/search")
 
+    projects = state.load_projects()
+    project_names = ["All projects"] + [val(p, "name", "Unnamed") for p in projects]
+    last_results: list[SearchResult] = []
+    last_query: dict[str, str] = {"value": ""}
+
     with ui.column().classes("ytis-page gap-4"):
         with ui.row().classes("w-full justify-between items-center"):
             with ui.column().classes("gap-0"):
                 ui.label("Search Transcripts").classes("text-3xl font-bold")
-                ui.label("Search clean TXT files inside saved projects").classes("text-sm text-slate-300")
+                ui.label("Search across clean TXT transcript files with snippets and exportable results").classes("text-sm text-slate-300")
+            ui.button("Build New Pack", icon="add", on_click=lambda: ui.navigate.to("/build"), color="primary")
 
-        projects = state.load_projects()
-        project_names = [val(p, "name", "Unnamed") for p in projects]
-        selected_project = ui.select(project_names, value=project_names[0] if project_names else None, label="Project").classes("w-full")
-        query = ui.input("Search text").classes("w-full")
-        results = ui.column().classes("w-full gap-2")
+        with ui.grid(columns=3).classes("w-full gap-4"):
+            with ui.card().classes("ytis-card p-5 w-full").style("grid-column: span 2;"):
+                ui.label("Search Controls").classes("text-xl font-bold")
+                with ui.row().classes("w-full gap-3"):
+                    selected_project = ui.select(project_names, value=project_names[0] if project_names else "All projects", label="Scope").classes("flex-1")
+                    max_results = ui.select([25, 50, 100, 200], value=100, label="Limit").classes("w-40")
+                query = ui.input("Search text").classes("w-full")
+                ui.label("Search is case-insensitive and scans local clean_txt files. It does not call YouTube.").classes("text-xs text-slate-400")
+                with ui.row().classes("gap-2 mt-2"):
+                    search_button = ui.button("Search", icon="search", color="primary")
+                    export_button = ui.button("Export CSV", icon="download").props("outline")
+                    export_button.disable()
+
+            with ui.card().classes("ytis-card p-5 w-full"):
+                ui.label("Useful Searches").classes("text-xl font-bold")
+                suggestions = ["pricing", "offer", "funnel", "agency", "cold email", "onboarding", "sales call", "niche"]
+                with ui.row().classes("gap-2"):
+                    for term in suggestions:
+                        ui.button(term, on_click=lambda t=term: setattr(query, "value", t)).props("outline dense")
+                ui.separator().classes("bg-slate-700 my-3")
+                ui.label("Tip").classes("font-bold")
+                ui.label("Use exact business terms first. Broad terms may return too much context.").classes("text-sm text-slate-400")
+
+        results_panel = ui.column().classes("w-full gap-2")
+
+        def render_empty() -> None:
+            results_panel.clear()
+            with results_panel:
+                with ui.card().classes("ytis-card p-5 w-full"):
+                    ui.label("Results").classes("text-xl font-bold")
+                    ui.label("Run a search to show transcript snippets, source files, and match counts here.").classes("text-slate-400")
+
+        def render_results(results: list[SearchResult], q: str) -> None:
+            results_panel.clear()
+            with results_panel:
+                with ui.card().classes("ytis-card p-5 w-full"):
+                    with ui.row().classes("w-full justify-between items-center"):
+                        ui.label(f"{len(results)} results for: {q}").classes("text-xl font-bold")
+                        ui.label(f"Scope: {selected_project.value}").classes("text-sm text-slate-400")
+                    if not results:
+                        ui.label("No matches found. Try a shorter or different term.").classes("text-slate-400")
+
+                for result in results:
+                    with ui.card().classes("ytis-mini-card p-4 w-full"):
+                        with ui.row().classes("w-full justify-between items-start gap-4"):
+                            with ui.column().classes("gap-1 flex-1"):
+                                ui.label(result.file_name).classes("font-bold")
+                                ui.label(f"{result.project} | video id: {result.video_id or '-'} | matches: {result.match_count}").classes("text-xs text-blue-300")
+                                ui.label(result.snippet).classes("text-sm text-slate-300")
+                            ui.button("Open TXT", icon="description", on_click=lambda p=result.file_path: open_path(p)).props("outline dense")
 
         def run_search() -> None:
-            results.clear()
-            q = (query.value or "").strip().lower()
+            nonlocal last_results
+            q = (query.value or "").strip()
             if not q:
                 ui.notify("Enter search text", type="warning")
                 return
 
-            project = next((p for p in projects if val(p, "name") == selected_project.value), None)
-            if not project:
-                ui.notify("Select a project", type="warning")
+            last_query["value"] = q
+            last_results = search_transcripts(
+                projects=projects,
+                query=q,
+                project_name=selected_project.value or "All projects",
+                limit=int(max_results.value or 100),
+            )
+            render_results(last_results, q)
+            if last_results:
+                export_button.enable()
+            else:
+                export_button.disable()
+
+        def run_export() -> None:
+            if not last_results:
+                ui.notify("No results to export", type="warning")
                 return
+            path = export_results(last_results, state.downloads_dir, last_query["value"])
+            ui.notify(f"Exported: {path}", type="positive")
+            open_path(path)
 
-            clean_dir = Path(val(project, "project_dir", "")) / "clean_txt"
-            if not clean_dir.exists():
-                ui.notify("clean_txt folder not found for this project", type="negative")
-                return
+        search_button.on("click", run_search)
+        export_button.on("click", run_export)
+        query.on("keydown.enter", lambda e: run_search())
 
-            matches = []
-            for txt in sorted(clean_dir.glob("*.txt")):
-                try:
-                    content = txt.read_text(encoding="utf-8", errors="replace")
-                except Exception:
-                    continue
-                idx = content.lower().find(q)
-                if idx >= 0:
-                    start = max(0, idx - 140)
-                    end = min(len(content), idx + 260)
-                    matches.append((txt.name, content[start:end].replace("\n", " ")))
-
-            with results:
-                ui.label(f"{len(matches)} matches").classes("text-lg font-bold")
-                for name, snippet in matches[:50]:
-                    with ui.card().classes("ytis-mini-card p-3 w-full"):
-                        ui.label(name).classes("font-bold")
-                        ui.label(snippet).classes("text-sm text-slate-300")
-
-        ui.button("Search", icon="search", on_click=run_search, color="primary")
-        results
+        render_empty()
