@@ -21,29 +21,85 @@ def render_shell(state: AppState, active_path: str) -> None:
     ui.add_head_html("""
         <style>
         body { background: #0f172a; }
-        .ytis-page { width: 100%; max-width: 1500px; margin: 0 auto; padding: 24px; color: #e2e8f0; }
+        .ytis-page {
+            width: 100%;
+            max-width: 1580px;
+            margin: 0 auto;
+            padding: 24px 28px;
+            color: #e2e8f0;
+        }
         .ytis-card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; }
         .ytis-mini-card { background: #0b1220; border: 1px solid #1e293b; border-radius: 12px; }
         .ytis-metric { background: #111827; border: 1px solid #1f2937; border-radius: 16px; min-height: 108px; }
-        .ytis-sidebar { background: #020617; border-right: 1px solid #1e293b; }
-        .ytis-nav-active { background: #1d4ed8 !important; color: white !important; }
-        .ytis-nav-button { width: 100%; justify-content: flex-start; }
+
+        .ytis-sidebar {
+            background: #020617;
+            border-right: 1px solid #1e293b;
+            width: 220px !important;
+            min-width: 220px !important;
+            max-width: 220px !important;
+        }
+        .ytis-sidebar .q-drawer {
+            width: 220px !important;
+        }
+        .ytis-brand-title {
+            font-size: 22px;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+        .ytis-brand-subtitle {
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.2;
+        }
+        .ytis-nav-button {
+            width: 100%;
+            justify-content: flex-start !important;
+            text-align: left !important;
+            padding-left: 10px !important;
+            padding-right: 8px !important;
+            min-height: 36px !important;
+            border-radius: 8px !important;
+        }
+        .ytis-nav-button .q-btn__content {
+            justify-content: flex-start !important;
+            text-align: left !important;
+            gap: 8px !important;
+        }
+        .ytis-nav-button .q-icon {
+            font-size: 20px !important;
+            margin-right: 4px !important;
+        }
+        .ytis-nav-button .block {
+            text-align: left !important;
+            font-size: 12px !important;
+            letter-spacing: .02em;
+        }
+        .ytis-nav-active {
+            background: #1d4ed8 !important;
+            color: white !important;
+        }
+        .ytis-header {
+            padding-left: 8px;
+        }
         </style>
     """)
-    with ui.left_drawer(value=True).classes("ytis-sidebar text-white"):
-        with ui.column().classes("w-full gap-3 p-3"):
-            ui.label("YTIS").classes("text-2xl font-bold")
-            ui.label("YouTube Intelligence System").classes("text-xs text-slate-400")
-            ui.separator()
+
+    with ui.left_drawer(value=True).classes("ytis-sidebar text-white").props("width=220"):
+        with ui.column().classes("w-full gap-2 px-3 py-3"):
+            ui.label("YTIS").classes("ytis-brand-title")
+            ui.label("YouTube Intelligence System").classes("ytis-brand-subtitle")
+            ui.separator().classes("my-2")
             for label, path, icon in NAV_ITEMS:
-                button = ui.button(label, icon=icon, on_click=lambda p=path: ui.navigate.to(p)).props("flat")
+                button = ui.button(label, icon=icon, on_click=lambda p=path: ui.navigate.to(p)).props("flat no-caps align=left")
                 button.classes("ytis-nav-button")
                 if path == active_path:
                     button.classes(add="ytis-nav-active")
-            ui.separator()
+            ui.separator().classes("my-2")
             ui.label("Current project").classes("text-xs text-slate-500")
-            ui.label(getattr(state, "current_project_name", "") or "No active project").classes("text-sm text-slate-300")
-    with ui.header().classes("bg-slate-950 text-white border-b border-slate-800"):
+            ui.label(getattr(state, "current_project_name", "") or "No active project").classes("text-xs text-slate-300")
+
+    with ui.header().classes("bg-slate-950 text-white border-b border-slate-800 ytis-header"):
         with ui.row().classes("w-full justify-between items-center"):
             ui.label("YTIS Local Research OS").classes("font-bold")
             ui.label(getattr(state, "app_version", "")).classes("text-xs text-slate-400")
