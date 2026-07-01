@@ -164,15 +164,27 @@ def render_missions(state: AppState) -> None:
             def show_chain(mission) -> None:
                 selected = selected_project_records(mission, projects)
                 prompts = generate_prompt_chain(mission, selected)
+                step_options = [f"Step {index}: {name}" for index, (name, _) in enumerate(prompts, start=1)]
+                prompt_map = {label: prompt for label, (_, prompt) in zip(step_options, prompts)}
                 combined = "\n\n---\n\n".join(prompt for _, prompt in prompts)
+
                 with ui.dialog() as dialog, ui.card().classes("bg-slate-900 text-white").style("width: 950px; max-width: 95vw;"):
                     ui.label("Mission Prompt Chain").classes("text-xl font-bold")
                     ui.label(f"{mission.name} | {len(prompts)} steps").classes("text-sm text-slate-400")
-                    prompt_box = ui.textarea(value=combined).classes("w-full").props("rows=26")
+                    step_select = ui.select(step_options, value=step_options[0] if step_options else None, label="Select prompt-chain step").classes("w-full")
+                    prompt_box = ui.textarea(value=prompt_map.get(step_select.value, "")).classes("w-full").props("rows=24")
                     prompt_box.style("font-family: Consolas, monospace; font-size: 12px;")
+
+                    def update_selected_step() -> None:
+                        prompt_box.value = prompt_map.get(step_select.value, "")
+                        prompt_box.update()
+
+                    step_select.on("update:model-value", lambda e: update_selected_step())
+
                     with ui.row().classes("justify-end w-full"):
                         ui.button("Close", on_click=dialog.close).props("outline")
-                        ui.button("Copy All Steps", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Prompt chain copied", type="positive")), color="primary")
+                        ui.button("Copy Selected Step", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Selected step copied", type="positive")), color="primary")
+                        ui.button("Copy All Steps", icon="select_all", on_click=lambda: (_copy_to_clipboard(combined), ui.notify("All steps copied", type="positive"))).props("outline")
                 dialog.open()
 
             def show_linked_analyses(mission) -> None:
