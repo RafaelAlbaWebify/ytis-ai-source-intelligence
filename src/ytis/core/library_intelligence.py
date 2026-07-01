@@ -26,6 +26,15 @@ TOPIC_KEYWORDS: dict[str, list[str]] = {
     "Workflow": ["workflow", "process", "system", "sop", "framework", "steps", "checklist", "automation"],
 }
 
+FOCUS_PRESETS: dict[str, str] = {
+    "Business lessons": "Compare these channels for practical business lessons, service ideas, positioning, offer design, pricing, sales process, and action steps for Webify Digital Solutions.",
+    "Offers and pricing": "Focus on offer design, packaging, pricing, proposals, retainers, guarantees, value propositions, and how services are sold.",
+    "Lead generation": "Focus on lead generation systems, funnels, outreach, ads, content, prospecting, appointment setting, and conversion workflows.",
+    "Workflow extraction": "Extract repeatable workflows, SOPs, checklists, operating systems, and implementation steps that can be reused in a small business.",
+    "Technical learning": "Focus on technical/business crossover lessons, IT service delivery, MSP operations, support workflows, and practical service delivery improvements.",
+    "Webify service ideas": "Extract realistic service ideas for Rafael Alba and Webify Digital Solutions, avoiding developer-agency positioning unless strongly supported by evidence.",
+}
+
 
 @dataclass
 class LibraryStats:
@@ -122,7 +131,6 @@ def _clean_txt_files(project: dict[str, Any]) -> list[Path]:
 
 
 def _count_keyword(text_lower: str, keyword: str) -> int:
-    # Word-boundary matching reduces false positives for small terms.
     escaped = re.escape(keyword.lower())
     if " " in keyword:
         return len(re.findall(escaped, text_lower))
@@ -143,10 +151,7 @@ def _snippet(text: str, keyword: str, radius: int = 150) -> str:
 
 def scan_topic_matrix(projects: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[TopicHit]]:
     project_names = [str(p.get("name", "Unnamed")) for p in projects]
-    matrix: dict[str, dict[str, int]] = {
-        topic: {project_name: 0 for project_name in project_names}
-        for topic in TOPIC_KEYWORDS
-    }
+    matrix: dict[str, dict[str, int]] = {topic: {project_name: 0 for project_name in project_names} for topic in TOPIC_KEYWORDS}
     evidence: list[TopicHit] = []
 
     for project in projects:
@@ -171,16 +176,7 @@ def scan_topic_matrix(projects: list[dict[str, Any]]) -> tuple[list[dict[str, An
                             best_keyword_hits = hits
                 if count:
                     matrix[topic][project_name] = matrix[topic].get(project_name, 0) + count
-                    evidence.append(
-                        TopicHit(
-                            project=project_name,
-                            topic=topic,
-                            file_name=path.name,
-                            file_path=str(path),
-                            matches=count,
-                            snippet=_snippet(text, best_keyword or keywords[0]),
-                        )
-                    )
+                    evidence.append(TopicHit(project_name, topic, path.name, str(path), count, _snippet(text, best_keyword or keywords[0])))
 
     rows: list[dict[str, Any]] = []
     for topic, project_counts in matrix.items():
@@ -189,11 +185,7 @@ def scan_topic_matrix(projects: list[dict[str, Any]]) -> tuple[list[dict[str, An
         strongest_count = 0
         if project_counts:
             strongest_project, strongest_count = max(project_counts.items(), key=lambda item: item[1])
-        row = {
-            "Topic": topic,
-            "Total": total,
-            "Strongest": strongest_project if strongest_count else "-",
-        }
+        row = {"Topic": topic, "Total": total, "Strongest": strongest_project if strongest_count else "-"}
         for project_name in project_names:
             row[project_name] = project_counts.get(project_name, 0)
         rows.append(row)
@@ -236,7 +228,7 @@ def export_topic_evidence(evidence: list[TopicHit], downloads_dir: Path) -> Path
     return path
 
 
-def generate_prompt(projects: list[dict[str, Any]], focus: str) -> str:
+def generate_prompt(projects: list[dict[str, Any]], focus: str, focus_preset: str = "Custom") -> str:
     stats = summarize(projects)
     ranked = ranked_projects(projects)
     matrix_rows, _ = scan_topic_matrix(projects)
@@ -253,25 +245,25 @@ def generate_prompt(projects: list[dict[str, Any]], focus: str) -> str:
             f"ZIP={p.get('zip_path', '-')}"
         )
 
-    topic_rows = []
-    for row in top_topics:
-        topic_rows.append(f"- {row['Topic']}: {row['Total']} matches, strongest={row['Strongest']}")
-
-    focus = focus.strip() or "Compare all uploaded YTIS packs for business lessons, workflows, service ideas, pricing, offers, and sales patterns."
+    topic_rows = [f"- {row['Topic']}: {row['Total']} matches, strongest={row['Strongest']}" for row in top_topics]
+    focus = focus.strip() or FOCUS_PRESETS.get("Business lessons", "")
 
     return f"""# YTIS Multi-Project Analysis Prompt
 
 You are analyzing multiple YouTube transcript research packs generated by YTIS.
 
+Analysis preset:
+- {focus_preset}
+
 Library context:
-- Projects: {stats.projects}
+- Projects included: {stats.projects}
 - Videos: {stats.videos}
 - Transcripts: {stats.transcripts}
 - Total words: {stats.words:,}
 - Missing subtitles: {stats.missing}
 - ZIP-ready projects: {stats.zip_ready}
 
-Projects:
+Projects included:
 {chr(10).join(project_rows)}
 
 Local topic scan summary:
@@ -282,8 +274,8 @@ Analysis focus:
 
 Instructions:
 - Use the uploaded ZIP files as the primary source.
-- Compare the projects/channels against each other.
-- Validate or challenge the local topic scan using the transcript evidence.
+- Compare the included projects/channels against each other.
+- Validate or challenge the local topic scan using transcript evidence.
 - Identify repeated advice across multiple creators.
 - Separate common advice from unique advice.
 - Prefer concrete workflows, examples, service ideas, offer/pricing logic, sales processes, and operational systems.
@@ -294,10 +286,10 @@ Instructions:
 Output format:
 1. Executive summary.
 2. Project-by-project comparison table.
-3. Strongest repeated lessons across all projects.
+3. Strongest repeated lessons across included projects.
 4. Topic-by-topic comparison.
 5. Unique or contradictory lessons.
-6. Workflow inventory across the library.
+6. Workflow inventory across the included library.
 7. Offer/pricing/service ideas relevant to Rafael Alba and Webify Digital Solutions.
 8. What to ignore or verify.
 9. Practical 30-day action plan.
@@ -310,12 +302,12 @@ def save_prompt(text: str, downloads_dir: Path) -> Path:
     return path
 
 
-def create_library_upload_bundle(projects: list[dict[str, Any]], focus: str, downloads_dir: Path) -> BundleResult:
+def create_library_upload_bundle(projects: list[dict[str, Any]], focus: str, downloads_dir: Path, focus_preset: str = "Custom") -> BundleResult:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     bundle_root = downloads_dir / f"YTIS_LIBRARY_UPLOAD_BUNDLE_{stamp}"
     bundle_root.mkdir(parents=True, exist_ok=True)
 
-    prompt_text = generate_prompt(projects, focus)
+    prompt_text = generate_prompt(projects, focus, focus_preset)
     prompt_path = bundle_root / "YTIS_MULTI_PROJECT_ANALYSIS_PROMPT.md"
     prompt_path.write_text(prompt_text, encoding="utf-8")
 
@@ -365,8 +357,11 @@ def create_library_upload_bundle(projects: list[dict[str, Any]], focus: str, dow
 
 Created: {stamp}
 
+Focus preset:
+- {focus_preset}
+
 Library summary:
-- Projects in registry: {stats.projects}
+- Projects included: {stats.projects}
 - ZIP-ready projects copied: {len(included)}
 - Videos: {stats.videos}
 - Transcripts: {stats.transcripts}
