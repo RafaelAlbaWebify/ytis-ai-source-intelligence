@@ -9,6 +9,8 @@ from ytis.core.missions import (
     MISSION_TOPIC_OPTIONS,
     create_mission,
     create_mission_bundle,
+    create_prompt_chain_pack,
+    generate_prompt_chain,
     list_missions,
     mission_stats,
     read_mission_prompt,
@@ -20,17 +22,14 @@ from ytis.ui.components import open_path
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, val
 
-
 def _project_root(state: AppState) -> Path:
     return Path(getattr(state, "project_root", "") or Path.cwd())
-
 
 def _downloads_dir(state: AppState) -> Path:
     value = getattr(state, "downloads_dir", None)
     if value:
         return Path(value)
     return Path.home() / "Downloads"
-
 
 def _metric(title: str, value: str, caption: str = ""):
     value_label = None
@@ -41,11 +40,9 @@ def _metric(title: str, value: str, caption: str = ""):
             ui.label(caption).classes("text-xs text-slate-500")
     return value_label
 
-
 def _copy_to_clipboard(text: str) -> None:
     safe = text.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
     ui.run_javascript(f"navigator.clipboard.writeText(`{safe}`)")
-
 
 def render_missions(state: AppState) -> None:
     render_shell(state, "/missions")
@@ -61,7 +58,7 @@ def render_missions(state: AppState) -> None:
         with ui.row().classes("w-full justify-between items-center"):
             with ui.column().classes("gap-0"):
                 ui.label("Study Missions").classes("text-3xl font-bold")
-                ui.label("Group channels, topics, prompts, bundles, and saved analyses around one research goal").classes("text-sm text-slate-300")
+                ui.label("Goal-based research with bundles, prompt chains, and saved ChatGPT analysis").classes("text-sm text-slate-300")
             with ui.row().classes("gap-2"):
                 ui.button("Intelligence", icon="hub", on_click=lambda: ui.navigate.to("/intelligence")).props("outline")
                 ui.button("Analysis Inbox", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox")).props("outline")
@@ -82,10 +79,9 @@ def render_missions(state: AppState) -> None:
             for metric in [missions_metric, active_metric, paused_metric, completed_metric]:
                 metric.update()
 
-        # Created before callbacks, assigned after Mission Library container exists.
         render_missions_list_ref = {"fn": None}
 
-        with ui.expansion("Create New Mission", icon="add_task", value=True).classes("ytis-card w-full text-white").props("expand-separator dense"):
+        with ui.expansion("Create New Mission", icon="add_task", value=False).classes("ytis-card w-full text-white").props("expand-separator dense"):
             with ui.column().classes("p-4 gap-3"):
                 with ui.grid(columns=2).classes("w-full gap-3"):
                     name_input = ui.input("Mission name", value="Webify service ideas").classes("w-full")
@@ -138,7 +134,7 @@ def render_missions(state: AppState) -> None:
 
         with ui.card().classes("ytis-card p-5 w-full"):
             ui.label("Mission Library").classes("text-xl font-bold")
-            ui.label("Create mission bundles, copy mission prompts, and track mission status.").classes("text-sm text-slate-400")
+            ui.label("Create mission bundles, staged prompt chains, and track mission status.").classes("text-sm text-slate-400")
             missions_container = ui.column().classes("w-full gap-2")
 
             def show_prompt(mission) -> None:
@@ -153,10 +149,29 @@ def render_missions(state: AppState) -> None:
                         ui.button("Copy Prompt", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Prompt copied", type="positive")), color="primary")
                 dialog.open()
 
+            def show_chain(mission) -> None:
+                selected = selected_project_records(mission, projects)
+                prompts = generate_prompt_chain(mission, selected)
+                combined = "\n\n---\n\n".join(prompt for _, prompt in prompts)
+                with ui.dialog() as dialog, ui.card().classes("bg-slate-900 text-white").style("width: 950px; max-width: 95vw;"):
+                    ui.label("Mission Prompt Chain").classes("text-xl font-bold")
+                    ui.label(f"{mission.name} | {len(prompts)} steps").classes("text-sm text-slate-400")
+                    prompt_box = ui.textarea(value=combined).classes("w-full").props("rows=26")
+                    prompt_box.style("font-family: Consolas, monospace; font-size: 12px;")
+                    with ui.row().classes("justify-end w-full"):
+                        ui.button("Close", on_click=dialog.close).props("outline")
+                        ui.button("Copy All Steps", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Prompt chain copied", type="positive")), color="primary")
+                dialog.open()
+
             def do_bundle(mission) -> None:
                 result = create_mission_bundle(mission, projects, downloads_dir)
                 ui.notify(f"Mission bundle created with {len(result.included_zips)} packs", type="positive")
                 open_path(result.bundle_path)
+
+            def do_chain_pack(mission) -> None:
+                result = create_prompt_chain_pack(mission, projects, downloads_dir)
+                ui.notify(f"Prompt chain ZIP created with {len(result.step_paths)} steps", type="positive")
+                open_path(result.chain_zip)
 
             def do_status(mission, status: str) -> None:
                 update_mission_status(mission, status)
@@ -184,7 +199,9 @@ def render_missions(state: AppState) -> None:
                                     ui.label(f"Selected project records available: {len(selected_projects)}").classes("text-xs text-slate-500")
                                 with ui.column().classes("gap-1"):
                                     ui.button("Create Bundle", icon="archive", on_click=lambda m=mission: do_bundle(m)).props("outline dense")
-                                    ui.button("Prompt", icon="article", on_click=lambda m=mission: show_prompt(m)).props("outline dense")
+                                    ui.button("Create Chain ZIP", icon="account_tree", on_click=lambda m=mission: do_chain_pack(m)).props("outline dense")
+                                    ui.button("View Chain", icon="schema", on_click=lambda m=mission: show_chain(m)).props("outline dense")
+                                    ui.button("One-Pass Prompt", icon="article", on_click=lambda m=mission: show_prompt(m)).props("outline dense")
                                     ui.button("Open Folder", icon="folder", on_click=lambda p=mission.folder: open_path(p)).props("outline dense")
                                     ui.button("Mark Completed", icon="check_circle", on_click=lambda m=mission: do_status(m, "completed")).props("outline dense")
                                     ui.button("Pause", icon="pause_circle", on_click=lambda m=mission: do_status(m, "paused")).props("outline dense")

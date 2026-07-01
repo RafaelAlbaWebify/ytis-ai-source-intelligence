@@ -46,6 +46,33 @@ MISSION_TEMPLATES: dict[str, str] = {
     "Custom": "",
 }
 
+CHAIN_STEPS = [
+    {
+        "name": "01_extract_map",
+        "title": "Extract and map the source material",
+        "task": "Create a structured map of the uploaded source material. Identify the main themes, repeated ideas, important examples, and project/channel differences. Do not produce final recommendations yet.",
+    },
+    {
+        "name": "02_compare_patterns",
+        "title": "Compare patterns and contradictions",
+        "task": "Compare the extracted material across projects/channels. Identify repeated patterns, unique advice, contradictions, and claims that need skepticism or validation.",
+    },
+    {
+        "name": "03_extract_workflows",
+        "title": "Extract workflows and operating systems",
+        "task": "Extract concrete workflows, checklists, scripts, SOPs, frameworks, and repeatable processes. Make them practical and step-by-step.",
+    },
+    {
+        "name": "04_apply_to_rafael_webify",
+        "title": "Apply findings to Rafael and Webify",
+        "task": "Apply the findings to Rafael Alba and Webify Digital Solutions. Respect his real background in IT operations, application support, Microsoft 365, DNS, manufacturing IT, incident management, documentation, and troubleshooting. Do not position him as a generic developer, cybersecurity expert, cloud architect, DBA, or software agency unless the source evidence strongly supports it.",
+    },
+    {
+        "name": "05_validation_plan",
+        "title": "Build validation and action plan",
+        "task": "Turn the previous findings into a validation plan. Separate what to test now, what to ignore, what evidence is weak, and what actions should be done in the next 7, 30, and 90 days.",
+    },
+]
 
 @dataclass
 class Mission:
@@ -62,7 +89,6 @@ class Mission:
     metadata_path: Path
     prompt_path: Path
 
-
 @dataclass
 class MissionBundleResult:
     bundle_path: Path
@@ -70,26 +96,27 @@ class MissionBundleResult:
     included_zips: list[Path]
     skipped_projects: list[str]
 
+@dataclass
+class PromptChainResult:
+    chain_zip: Path
+    chain_folder: Path
+    step_paths: list[Path]
 
 def safe_slug(text: str, fallback: str = "mission") -> str:
     value = re.sub(r"[^A-Za-z0-9_-]+", "_", text.strip())
     value = re.sub(r"_+", "_", value).strip("_")
     return value[:90] or fallback
 
-
 def missions_root(project_root: Path) -> Path:
     path = project_root / "missions"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
-
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-
 def _stamp() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
-
 
 def _mission_from_data(folder: Path, data: dict[str, Any]) -> Mission:
     return Mission(
@@ -107,7 +134,6 @@ def _mission_from_data(folder: Path, data: dict[str, Any]) -> Mission:
         prompt_path=folder / "mission_prompt.md",
     )
 
-
 def create_mission(
     project_root: Path,
     name: str,
@@ -124,6 +150,7 @@ def create_mission(
     (folder / "bundles").mkdir(exist_ok=True)
     (folder / "evidence_packs").mkdir(exist_ok=True)
     (folder / "analyses").mkdir(exist_ok=True)
+    (folder / "prompt_chains").mkdir(exist_ok=True)
 
     created = _now()
     data = {
@@ -142,7 +169,6 @@ def create_mission(
     mission.prompt_path.write_text(generate_mission_prompt(mission, []), encoding="utf-8")
     return mission
 
-
 def save_mission(mission: Mission) -> None:
     mission.updated_at = _now()
     data = {
@@ -158,7 +184,6 @@ def save_mission(mission: Mission) -> None:
     }
     mission.metadata_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     mission.prompt_path.write_text(generate_mission_prompt(mission, []), encoding="utf-8")
-
 
 def list_missions(project_root: Path) -> list[Mission]:
     root = missions_root(project_root)
@@ -176,7 +201,6 @@ def list_missions(project_root: Path) -> list[Mission]:
             continue
     return missions
 
-
 def mission_stats(missions: list[Mission]) -> dict[str, int]:
     return {
         "missions": len(missions),
@@ -185,15 +209,12 @@ def mission_stats(missions: list[Mission]) -> dict[str, int]:
         "completed": sum(1 for m in missions if m.status == "completed"),
     }
 
-
 def project_lookup(projects: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {str(p.get("name", "Unnamed")): p for p in projects}
-
 
 def selected_project_records(mission: Mission, projects: list[dict[str, Any]]) -> list[dict[str, Any]]:
     lookup = project_lookup(projects)
     return [lookup[name] for name in mission.projects if name in lookup]
-
 
 def _project_summary(project: dict[str, Any]) -> str:
     name = project.get("name", "Unnamed")
@@ -202,7 +223,6 @@ def _project_summary(project: dict[str, Any]) -> str:
     words = project.get("total_words", 0)
     zip_path = project.get("zip_path", "")
     return f"- {name}: {videos} videos, {transcripts} transcripts, {words} words, ZIP={zip_path or '-'}"
-
 
 def generate_mission_prompt(mission: Mission, projects: list[dict[str, Any]]) -> str:
     project_rows = "\n".join(_project_summary(p) for p in projects) if projects else "- Project details will be added when a bundle is generated."
@@ -248,6 +268,108 @@ Output format:
 10. 7-day and 30-day action plan.
 """
 
+def _chain_context(mission: Mission, projects: list[dict[str, Any]]) -> str:
+    project_rows = "\n".join(_project_summary(p) for p in projects) if projects else "- Project details unavailable."
+    topics = ", ".join(mission.topics) if mission.topics else "not specified"
+    goal = mission.goal.strip() or MISSION_TEMPLATES.get(mission.focus_preset, "")
+    return f"""Mission: {mission.name}
+Goal: {goal or '-'}
+Focus preset: {mission.focus_preset}
+Topics: {topics}
+
+Projects:
+{project_rows}
+"""
+
+def generate_prompt_chain(mission: Mission, projects: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    context = _chain_context(mission, projects)
+    prompts: list[tuple[str, str]] = []
+    previous_instruction = "Use the uploaded YTIS research packs as the primary source."
+
+    for index, step in enumerate(CHAIN_STEPS, start=1):
+        title = step["title"]
+        name = step["name"]
+        carry_forward = ""
+        if index > 1:
+            carry_forward = (
+                "\nBefore answering this step, use the previous ChatGPT answer in this chat as context. "
+                "Do not repeat everything. Continue the analysis and deepen it.\n"
+            )
+
+        prompt = f"""# YTIS Mission Prompt Chain - Step {index}: {title}
+
+Mission context:
+{context}
+
+Step task:
+{step['task']}
+
+Rules:
+- {previous_instruction}
+- Work toward the mission goal.
+- Be practical and evidence-driven.
+- Clearly separate evidence-backed findings from interpretation.
+- Reference source project/channel names when possible.
+- If evidence is weak or missing, say so.
+{carry_forward}
+
+Output:
+- Start with a concise step summary.
+- Then provide structured findings.
+- End with "What to save back into YTIS" as bullet points.
+"""
+        prompts.append((name, prompt))
+    return prompts
+
+def create_prompt_chain_pack(mission: Mission, projects: list[dict[str, Any]], downloads_dir: Path) -> PromptChainResult:
+    stamp = _stamp()
+    selected = selected_project_records(mission, projects)
+    chain_root = mission.folder / "prompt_chains" / f"PROMPT_CHAIN_{stamp}"
+    chain_root.mkdir(parents=True, exist_ok=True)
+
+    prompts = generate_prompt_chain(mission, selected)
+    step_paths: list[Path] = []
+    for index, (name, prompt) in enumerate(prompts, start=1):
+        path = chain_root / f"STEP_{index:02d}_{name}.md"
+        path.write_text(prompt, encoding="utf-8")
+        step_paths.append(path)
+
+    combined = chain_root / "ALL_STEPS_COMBINED.md"
+    combined.write_text(
+        "\n\n---\n\n".join(path.read_text(encoding="utf-8") for path in step_paths),
+        encoding="utf-8",
+    )
+
+    readme = chain_root / "README_PROMPT_CHAIN.md"
+    readme.write_text(
+        f"""# YTIS Mission Prompt Chain
+
+Mission: {mission.name}
+Focus: {mission.focus_preset}
+
+How to use:
+1. Upload the mission bundle or selected research packs to ChatGPT.
+2. Run STEP_01 first.
+3. Save the ChatGPT answer into YTIS Analysis Inbox.
+4. Run STEP_02 in the same chat or with the previous answer pasted.
+5. Continue until the final validation/action step.
+6. Save important answers back into YTIS Analysis Inbox.
+
+Files:
+{chr(10).join(f"- {path.name}" for path in step_paths)}
+- ALL_STEPS_COMBINED.md
+""",
+        encoding="utf-8",
+    )
+
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = downloads_dir / f"YTIS_PROMPT_CHAIN_{safe_slug(mission.name)}_{stamp}.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in chain_root.rglob("*"):
+            if path.is_file():
+                zf.write(path, path.relative_to(chain_root))
+
+    return PromptChainResult(zip_path, chain_root, step_paths)
 
 def create_mission_bundle(
     mission: Mission,
@@ -265,6 +387,12 @@ def create_mission_bundle(
     prompt_path = bundle_root / "MISSION_PROMPT.md"
     prompt_path.write_text(prompt, encoding="utf-8")
     mission.prompt_path.write_text(prompt, encoding="utf-8")
+
+    chain = generate_prompt_chain(mission, selected)
+    chain_dir = bundle_root / "prompt_chain"
+    chain_dir.mkdir(exist_ok=True)
+    for index, (name, step_prompt) in enumerate(chain, start=1):
+        (chain_dir / f"STEP_{index:02d}_{name}.md").write_text(step_prompt, encoding="utf-8")
 
     included: list[Path] = []
     skipped: list[str] = []
@@ -296,9 +424,8 @@ Goal:
 
 How to use:
 1. Upload this mission bundle ZIP to ChatGPT.
-2. Open MISSION_PROMPT.md.
-3. Paste the mission prompt after upload.
-4. Save the ChatGPT result back into YTIS Analysis Inbox.
+2. Open MISSION_PROMPT.md for one-pass analysis, or use prompt_chain/ for staged analysis.
+3. Save the ChatGPT result back into YTIS Analysis Inbox.
 
 Included research packs:
 {chr(10).join(f"- {p.name}" for p in included) or "- None"}
@@ -318,11 +445,9 @@ Skipped:
 
     return MissionBundleResult(bundle_zip, prompt_path, included, skipped)
 
-
 def update_mission_status(mission: Mission, status: str) -> None:
     mission.status = status
     save_mission(mission)
-
 
 def read_mission_prompt(mission: Mission) -> str:
     if mission.prompt_path.exists():
