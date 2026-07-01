@@ -4,6 +4,7 @@ from nicegui import ui
 
 from ytis.core.library_intelligence import (
     compact,
+    create_library_upload_bundle,
     generate_prompt,
     ranked_projects,
     save_prompt,
@@ -70,20 +71,17 @@ def render_intelligence(state: AppState) -> None:
                     ui.label("No projects yet.").classes("text-slate-400")
 
             with ui.card().classes("ytis-card p-5 w-full"):
-                ui.label("Library Readiness").classes("text-xl font-bold")
+                ui.label("Library Upload Bundle").classes("text-xl font-bold")
                 ready = stats.projects >= 2 and stats.zip_ready >= 2
-                ui.label("Ready for cross-channel analysis" if ready else "Build at least two ZIP-ready packs").classes(
+                ui.label("Ready to bundle multiple research packs" if ready else "Build at least two ZIP-ready packs").classes(
                     "text-green-400 font-bold" if ready else "text-yellow-300 font-bold"
                 )
-                for key, value in [
-                    ("Projects", stats.projects),
-                    ("ZIP-ready", stats.zip_ready),
-                    ("Missing subtitles", stats.missing),
-                    ("Total words", stats.words),
-                ]:
-                    with ui.row().classes("w-full justify-between border-b border-slate-800 py-1"):
-                        ui.label(key).classes("text-sm text-slate-400")
-                        ui.label(compact(value)).classes("text-sm font-bold")
+                ui.label("Creates one ZIP containing all ZIP-ready packs, the multi-project prompt, and a README.").classes("text-sm text-slate-400")
+                bundle_status = ui.label("No bundle created yet.").classes("text-xs text-slate-500")
+                with ui.row().classes("gap-2 mt-3"):
+                    create_bundle_btn = ui.button("Create Upload Bundle", icon="archive", color="primary")
+                    open_bundle_btn = ui.button("Open Bundle", icon="inventory_2").props("outline")
+                    open_bundle_btn.disable()
 
         with ui.card().classes("ytis-card p-5 w-full"):
             with ui.row().classes("w-full justify-between items-center"):
@@ -105,6 +103,8 @@ def render_intelligence(state: AppState) -> None:
             save_btn.disable()
             output = ui.textarea("Generated multi-project prompt").classes("w-full mt-3").props("rows=22")
             output.style("font-family: Consolas, monospace; font-size: 12px; line-height: 1.45;")
+
+            last_bundle = {"path": None}
 
             def do_generate() -> None:
                 if not projects:
@@ -129,15 +129,31 @@ def render_intelligence(state: AppState) -> None:
                 ui.notify(f"Saved: {path}", type="positive")
                 open_path(path)
 
+            def do_bundle() -> None:
+                if not projects:
+                    ui.notify("No projects available", type="warning")
+                    return
+                result = create_library_upload_bundle(projects, focus.value or "", state.downloads_dir)
+                last_bundle["path"] = result.bundle_path
+                bundle_status.text = f"Bundle ready: {result.bundle_path.name} | {len(result.included_zips)} packs included"
+                bundle_status.classes(remove="text-slate-500")
+                bundle_status.classes(add="text-green-400")
+                bundle_status.update()
+                open_bundle_btn.enable()
+                ui.notify("Library upload bundle created", type="positive")
+                open_path(result.bundle_path)
+
             generate_btn.on("click", do_generate)
             copy_btn.on("click", do_copy)
             save_btn.on("click", do_save)
+            create_bundle_btn.on("click", do_bundle)
+            open_bundle_btn.on("click", lambda: open_path(last_bundle["path"]) if last_bundle["path"] else None)
             if projects:
                 do_generate()
 
         with ui.card().classes("ytis-card p-5 w-full"):
             ui.label("ZIP Upload Checklist").classes("text-xl font-bold")
-            ui.label("Upload these ZIPs together when using the cross-project prompt:").classes("text-sm text-slate-400")
+            ui.label("Upload these ZIPs together when using the cross-project prompt, or use the Library Upload Bundle above.").classes("text-sm text-slate-400")
             for p in ranked:
                 with ui.row().classes("w-full justify-between border-b border-slate-800 py-1"):
                     ui.label(val(p, "name", "Unnamed")).classes("text-sm font-bold")

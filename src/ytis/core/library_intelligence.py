@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +36,15 @@ class LibraryStats:
     zip_ready: int
 
 
+@dataclass
+class BundleResult:
+    bundle_path: Path
+    prompt_path: Path
+    readme_path: Path
+    included_zips: list[Path]
+    skipped_projects: list[str]
+
+
 def summarize(projects: list[dict[str, Any]]) -> LibraryStats:
     return LibraryStats(
         projects=len(projects),
@@ -41,7 +52,7 @@ def summarize(projects: list[dict[str, Any]]) -> LibraryStats:
         transcripts=sum(as_int(p.get("transcripts_created")) for p in projects),
         words=sum(as_int(p.get("total_words")) for p in projects),
         missing=sum(as_int(p.get("missing_subtitles")) for p in projects),
-        zip_ready=sum(1 for p in projects if p.get("zip_path")),
+        zip_ready=sum(1 for p in projects if p.get("zip_path") and Path(str(p.get("zip_path"))).exists()),
     )
 
 
@@ -133,3 +144,78 @@ def save_prompt(text: str, downloads_dir: Path) -> Path:
     path = downloads_dir / f"YTIS_MULTI_PROJECT_PROMPT_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
     path.write_text(text, encoding="utf-8")
     return path
+
+
+def create_library_upload_bundle(projects: list[dict[str, Any]], focus: str, downloads_dir: Path) -> BundleResult:
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    bundle_root = downloads_dir / f"YTIS_LIBRARY_UPLOAD_BUNDLE_{stamp}"
+    bundle_root.mkdir(parents=True, exist_ok=True)
+
+    prompt_text = generate_prompt(projects, focus)
+    prompt_path = bundle_root / "YTIS_MULTI_PROJECT_ANALYSIS_PROMPT.md"
+    prompt_path.write_text(prompt_text, encoding="utf-8")
+
+    stats = summarize(projects)
+    zip_dir = bundle_root / "research_packs"
+    zip_dir.mkdir(parents=True, exist_ok=True)
+
+    included: list[Path] = []
+    skipped: list[str] = []
+
+    for project in ranked_projects(projects):
+        name = str(project.get("name", "Unnamed"))
+        zip_value = project.get("zip_path")
+        if not zip_value:
+            skipped.append(f"{name}: no ZIP path")
+            continue
+        src = Path(str(zip_value))
+        if not src.exists():
+            skipped.append(f"{name}: ZIP missing")
+            continue
+        safe_name = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in name).strip("_") or "project"
+        dst = zip_dir / f"{safe_name}__{src.name}"
+        shutil.copy2(src, dst)
+        included.append(dst)
+
+    readme = bundle_root / "README_UPLOAD_THIS_BUNDLE.md"
+    readme.write_text(
+        f"""# YTIS Library Upload Bundle
+
+Created: {stamp}
+
+Library summary:
+- Projects in registry: {stats.projects}
+- ZIP-ready projects copied: {len(included)}
+- Videos: {stats.videos}
+- Transcripts: {stats.transcripts}
+- Words: {stats.words:,}
+- Missing subtitles: {stats.missing}
+
+How to use:
+1. Upload this whole bundle ZIP to ChatGPT, or upload the ZIP files inside `research_packs`.
+2. Open `YTIS_MULTI_PROJECT_ANALYSIS_PROMPT.md`.
+3. Paste the prompt after uploading the research packs.
+4. Ask ChatGPT to use the uploaded files as the primary source.
+
+Included research packs:
+{chr(10).join(f"- {p.name}" for p in included) or "- None"}
+
+Skipped:
+{chr(10).join(f"- {item}" for item in skipped) or "- None"}
+""",
+        encoding="utf-8",
+    )
+
+    bundle_zip = downloads_dir / f"YTIS_LIBRARY_UPLOAD_BUNDLE_{stamp}.zip"
+    with zipfile.ZipFile(bundle_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in bundle_root.rglob("*"):
+            if path.is_file():
+                zf.write(path, path.relative_to(bundle_root))
+
+    return BundleResult(
+        bundle_path=bundle_zip,
+        prompt_path=prompt_path,
+        readme_path=readme,
+        included_zips=included,
+        skipped_projects=skipped,
+    )
