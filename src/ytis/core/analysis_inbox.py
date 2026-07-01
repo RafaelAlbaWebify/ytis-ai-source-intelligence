@@ -2,21 +2,50 @@ from __future__ import annotations
 
 import json
 import re
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+
 FOCUS_OPTIONS = [
-    "Business lessons", "Offers and pricing", "Lead generation",
-    "Workflow extraction", "Technical learning", "Webify service ideas", "Custom",
+    "Business lessons",
+    "Offers and pricing",
+    "Lead generation",
+    "Workflow extraction",
+    "Technical learning",
+    "Webify service ideas",
+    "Custom",
 ]
 
 TOPIC_OPTIONS = [
-    "All topics", "Pricing", "Offer", "Lead generation", "Sales call",
-    "Cold email", "Funnel", "Agency", "MSP", "Niche", "Onboarding",
-    "Content", "Ads", "Workflow", "Custom",
+    "All topics",
+    "Pricing",
+    "Offer",
+    "Lead generation",
+    "Sales call",
+    "Cold email",
+    "Funnel",
+    "Agency",
+    "MSP",
+    "Niche",
+    "Onboarding",
+    "Content",
+    "Ads",
+    "Workflow",
+    "Custom",
 ]
+
+TRACKED_TOPICS = [
+    "Pricing",
+    "Offer",
+    "Lead generation",
+    "Workflow extraction",
+    "Technical learning",
+    "Webify service ideas",
+]
+
 
 @dataclass
 class AnalysisRecord:
@@ -34,22 +63,29 @@ class AnalysisRecord:
     word_count: int
     summary: str
 
+
 def safe_slug(text: str, fallback: str = "analysis") -> str:
     value = re.sub(r"[^A-Za-z0-9_-]+", "_", text.strip())
     value = re.sub(r"_+", "_", value).strip("_")
     return value[:80] or fallback
+
 
 def analysis_root(project_root: Path) -> Path:
     path = project_root / "analysis_results"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
+
 def _word_count(text: str) -> int:
     return len(re.findall(r"\b\w+\b", text or ""))
 
+
 def _summary(text: str, max_chars: int = 240) -> str:
     clean = re.sub(r"\s+", " ", text or "").strip()
-    return clean if len(clean) <= max_chars else clean[:max_chars].rstrip() + "..."
+    if len(clean) <= max_chars:
+        return clean
+    return clean[:max_chars].rstrip() + "..."
+
 
 def save_analysis(
     project_root: Path,
@@ -85,6 +121,7 @@ def save_analysis(
         md += f"Source evidence pack: `{source_evidence_pack}`\n\n"
     md += "---\n\n" + body + "\n"
     analysis_path.write_text(md, encoding="utf-8")
+
     notes_path.write_text((notes.strip() + "\n") if notes.strip() else "", encoding="utf-8")
 
     metadata = {
@@ -102,7 +139,8 @@ def save_analysis(
         "summary": _summary(body),
     }
     metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
-    return _record_from_data(folder, metadata)  # type: ignore[return-value]
+    return _record_from_data(folder, metadata)
+
 
 def _record_from_data(folder: Path, data: dict[str, Any]) -> AnalysisRecord:
     return AnalysisRecord(
@@ -121,6 +159,7 @@ def _record_from_data(folder: Path, data: dict[str, Any]) -> AnalysisRecord:
         summary=str(data.get("summary") or ""),
     )
 
+
 def _record_from_folder(folder: Path) -> AnalysisRecord | None:
     metadata_path = folder / "metadata.json"
     analysis_path = folder / "analysis.md"
@@ -132,6 +171,7 @@ def _record_from_folder(folder: Path) -> AnalysisRecord | None:
     except Exception:
         return None
 
+
 def list_analyses(project_root: Path) -> list[AnalysisRecord]:
     root = analysis_root(project_root)
     records: list[AnalysisRecord] = []
@@ -141,6 +181,7 @@ def list_analyses(project_root: Path) -> list[AnalysisRecord]:
             if record:
                 records.append(record)
     return records
+
 
 def filter_analyses(
     records: list[AnalysisRecord],
@@ -168,11 +209,13 @@ def filter_analyses(
         ]
     return result
 
+
 def read_analysis(record: AnalysisRecord) -> str:
     try:
         return record.analysis_path.read_text(encoding="utf-8-sig", errors="replace")
     except Exception:
         return ""
+
 
 def analysis_stats(records: list[AnalysisRecord]) -> dict[str, Any]:
     projects = sorted({p for r in records for p in r.projects})
@@ -185,3 +228,88 @@ def analysis_stats(records: list[AnalysisRecord]) -> dict[str, Any]:
         "focus_presets": len(focus),
         "words": sum(r.word_count for r in records),
     }
+
+
+def coverage_rows(records: list[AnalysisRecord], project_names: list[str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for project in project_names:
+        row: dict[str, Any] = {"Project": project}
+        project_records = [r for r in records if project in r.projects]
+        row["Total"] = len(project_records)
+        for topic in TRACKED_TOPICS:
+            count = sum(
+                1 for r in project_records
+                if r.topic == topic
+                or r.focus_preset == topic
+                or (topic == "Workflow extraction" and r.focus_preset == "Workflow extraction")
+                or (topic == "Technical learning" and r.focus_preset == "Technical learning")
+                or (topic == "Webify service ideas" and r.focus_preset == "Webify service ideas")
+            )
+            row[topic] = count
+        rows.append(row)
+    return rows
+
+
+def generate_continue_prompt(record: AnalysisRecord) -> str:
+    analysis = read_analysis(record)
+    return f"""# Continue YTIS Analysis
+
+You previously analyzed a YTIS research bundle/evidence pack.
+
+Saved analysis metadata:
+- Title: {record.title}
+- Created: {record.created_at}
+- Projects: {', '.join(record.projects) if record.projects else '-'}
+- Topic: {record.topic or '-'}
+- Focus preset: {record.focus_preset or '-'}
+- Source bundle: {record.source_bundle or '-'}
+- Source evidence pack: {record.source_evidence_pack or '-'}
+
+Task:
+Continue from the saved analysis below. Do not repeat the whole analysis. Instead:
+1. Extract the most actionable points.
+2. Identify weak assumptions or advice that needs validation.
+3. Convert the analysis into concrete next actions for Rafael/Webify.
+4. Propose the next YTIS evidence pack or prompt to run.
+5. Separate what is evidence-backed from what is interpretation.
+
+Saved analysis:
+---
+{analysis}
+"""
+
+
+def export_analyses_zip(records: list[AnalysisRecord], downloads_dir: Path, name: str = "YTIS_ANALYSIS_EXPORT") -> Path:
+    downloads_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_path = downloads_dir / f"{safe_slug(name)}_{stamp}.zip"
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        manifest: list[dict[str, Any]] = []
+        for record in records:
+            base = f"{record.record_id}/"
+            if record.analysis_path.exists():
+                zf.write(record.analysis_path, base + "analysis.md")
+            if record.metadata_path.exists():
+                zf.write(record.metadata_path, base + "metadata.json")
+            notes_path = record.folder / "notes.md"
+            if notes_path.exists():
+                zf.write(notes_path, base + "notes.md")
+            manifest.append({
+                "record_id": record.record_id,
+                "title": record.title,
+                "created_at": record.created_at,
+                "projects": record.projects,
+                "topic": record.topic,
+                "focus_preset": record.focus_preset,
+                "word_count": record.word_count,
+                "summary": record.summary,
+            })
+        zf.writestr("MANIFEST.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+        zf.writestr(
+            "README.md",
+            "# YTIS Analysis Export\n\n"
+            "This ZIP contains saved ChatGPT analyses from the YTIS Analysis Inbox.\n"
+            "Each folder contains analysis.md, metadata.json, and notes.md when available.\n",
+        )
+    return zip_path
