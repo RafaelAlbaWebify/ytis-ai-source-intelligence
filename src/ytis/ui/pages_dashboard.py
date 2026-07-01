@@ -4,6 +4,7 @@ from pathlib import Path
 
 from nicegui import ui
 
+from ytis.core.pack_inspector import inspect_pack
 from ytis.core.project_hygiene import audit_project, audit_projects
 from ytis.ui.components import (
     command_metric_row,
@@ -13,22 +14,19 @@ from ytis.ui.components import (
     recent_projects_list,
 )
 from ytis.ui.layout import render_shell
-from ytis.ui.state import AppState, fmt_int, short_path, val
+from ytis.ui.state import AppState, short_path, val
 
 
-def _next_action(project: dict, status: str) -> str:
+def _next_action(project: dict, status: str, pack_status: str) -> str:
     if not project:
         return "No pack exists yet. Build your first research pack."
     if status == "broken":
         return "The current project has hygiene issues. Open Projects and review the status before relying on it."
+    if pack_status != "upload-ready":
+        return "Inspect the ZIP before upload. The pack inspector found something to review."
     if status == "review":
-        return "Pack is usable, but some expected files are missing. Review the project hygiene details."
-    if not project.get("zip_path"):
-        return "Project exists, but the ZIP is missing. Repackage or rebuild it."
-    missing = str(project.get("missing_subtitles", "0"))
-    if missing not in {"0", "-", ""}:
-        return f"Pack is ready, but {missing} subtitles are missing. Review the missing report."
-    return "Pack is ready. Next: search transcripts, inspect the ZIP, or upload the pack for analysis."
+        return "Pack is upload-ready, but project hygiene has minor warnings. Review before relying on it."
+    return "Pack is upload-ready. Next: generate an analysis prompt and upload the ZIP."
 
 
 def _find_first_combined_md(project: dict) -> Path | None:
@@ -54,6 +52,8 @@ def render_dashboard(state: AppState) -> None:
     audited_projects = audit_projects(projects)
     hygiene = audit_project(project) if project else None
     hygiene_status = hygiene.status if hygiene else "none"
+    pack_report = inspect_pack(project) if project else None
+    pack_status = pack_report.status if pack_report else "none"
 
     with ui.column().classes("ytis-page gap-4"):
         page_title("Dashboard", "Command center for YouTube research packs")
@@ -80,24 +80,26 @@ def render_dashboard(state: AppState) -> None:
                                 ui.button("Open ZIP", icon="inventory_2", on_click=lambda p=project: open_path(str(p["zip_path"]))).props("outline").classes("w-full")
                             if project.get("project_dir"):
                                 ui.button("Open Folder", icon="folder_open", on_click=lambda p=project: open_path(str(p["project_dir"]))).props("outline").classes("w-full")
-                            ui.button("Rebuild / Refresh", icon="rocket_launch", on_click=lambda: ui.navigate.to("/build"), color="primary").classes("w-full")
+                            ui.button("Inspect ZIP", icon="inventory_2", on_click=lambda: ui.navigate.to("/inspect"), color="primary").classes("w-full")
 
                     ui.separator().classes("bg-slate-700 my-3")
                     command_metric_row(project)
 
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Next Action").classes("text-xl font-bold")
-                ui.label(_next_action(project, hygiene_status)).classes("text-base text-slate-200")
+                ui.label(_next_action(project, hygiene_status, pack_status)).classes("text-base text-slate-200")
                 ui.separator().classes("bg-slate-700 my-3")
 
-                ui.label("Project Hygiene").classes("font-bold")
-                if hygiene:
-                    ui.label(hygiene.issue_text()).classes("text-sm text-slate-400")
+                ui.label("Pack Inspection").classes("font-bold")
+                if pack_report:
+                    color = "text-green-400" if pack_status == "upload-ready" else "text-yellow-400" if pack_status == "review" else "text-red-400"
+                    ui.label(pack_status.upper()).classes(f"text-sm font-bold {color}")
+                    ui.label(pack_report.issue_text()).classes("text-sm text-slate-400")
                     with ui.row().classes("gap-2 mt-2"):
-                        ui.button("Open Projects", icon="folder", on_click=lambda: ui.navigate.to("/projects"), color="primary")
-                        ui.button("Search", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline")
+                        ui.button("Inspect Pack", icon="inventory_2", on_click=lambda: ui.navigate.to("/inspect"), color="primary")
+                        ui.button("Analyze", icon="psychology", on_click=lambda: ui.navigate.to("/analyze")).props("outline")
                 else:
-                    ui.label("No hygiene report available yet.").classes("text-slate-400")
+                    ui.label("No pack inspection available yet.").classes("text-slate-400")
 
                 ui.separator().classes("bg-slate-700 my-3")
                 ui.label("Quick Search").classes("font-bold")
@@ -109,7 +111,6 @@ def render_dashboard(state: AppState) -> None:
                         ui.button("Open Combined MD", icon="description", on_click=lambda p=combined_md: open_path(p)).props("outline")
                     else:
                         ui.button("Open Combined MD", icon="description").props("outline disable")
-                ui.label("Search page is the deep search area. This box is a dashboard shortcut.").classes("text-xs text-slate-500")
 
         with ui.grid(columns=3).classes("w-full gap-4"):
             with ui.card().classes("ytis-card p-5 w-full"):
@@ -133,7 +134,8 @@ def render_dashboard(state: AppState) -> None:
                 ui.button("Generate upload prompt", icon="content_copy", on_click=lambda: ui.navigate.to("/analyze")).props("outline").classes("w-full")
                 ui.button("Business lessons prompt", icon="psychology", on_click=lambda: ui.navigate.to("/analyze")).props("outline").classes("w-full")
                 ui.button("Workflow extraction prompt", icon="account_tree", on_click=lambda: ui.navigate.to("/analyze")).props("outline").classes("w-full")
-                ui.label("Prompt generator is now available in Analyze.").classes("text-xs text-blue-300 mt-2")
+                if project and project.get("zip_path"):
+                    ui.label("ZIP: " + short_path(project.get("zip_path"), 52)).classes("text-xs text-blue-300 mt-2")
 
             health_card(state.app_version, compact=True)
 

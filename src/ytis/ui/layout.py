@@ -12,6 +12,7 @@ NAV_ITEMS = [
     ("Projects", "/projects", "folder"),
     ("Search", "/search", "search"),
     ("Analyze", "/analyze", "psychology"),
+    ("Inspect", "/inspect", "inventory_2"),
     ("Health", "/health", "health_and_safety"),
 ]
 
@@ -65,6 +66,7 @@ def register_pages(app_version: str) -> None:
     from ytis.ui.pages_build import render_build
     from ytis.ui.pages_dashboard import render_dashboard
     from ytis.ui.pages_health import render_health
+    from ytis.ui.pages_inspect import render_inspect
     from ytis.ui.pages_projects import render_projects
     from ytis.ui.pages_search import render_search
 
@@ -89,6 +91,10 @@ def register_pages(app_version: str) -> None:
     @ui.page("/analyze")
     def analyze_page() -> None:
         render_analyze(state)
+
+    @ui.page("/inspect")
+    def inspect_page() -> None:
+        render_inspect(state)
 
     @ui.page("/health")
     def health_page() -> None:
