@@ -4,6 +4,7 @@ from pathlib import Path
 
 from nicegui import ui
 
+from ytis.core.project_hygiene import audit_project, audit_projects
 from ytis.ui.components import (
     command_metric_row,
     health_card,
@@ -15,9 +16,13 @@ from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, fmt_int, short_path, val
 
 
-def _next_action(project: dict) -> str:
+def _next_action(project: dict, status: str) -> str:
     if not project:
         return "No pack exists yet. Build your first research pack."
+    if status == "broken":
+        return "The current project has hygiene issues. Open Projects and review the status before relying on it."
+    if status == "review":
+        return "Pack is usable, but some expected files are missing. Review the project hygiene details."
     if not project.get("zip_path"):
         return "Project exists, but the ZIP is missing. Repackage or rebuild it."
     missing = str(project.get("missing_subtitles", "0"))
@@ -46,13 +51,20 @@ def render_dashboard(state: AppState) -> None:
     render_shell(state, "/")
     project = state.load_latest_project()
     projects = state.load_projects()
+    audited_projects = audit_projects(projects)
+    hygiene = audit_project(project) if project else None
+    hygiene_status = hygiene.status if hygiene else "none"
 
     with ui.column().classes("ytis-page gap-4"):
         page_title("Dashboard", "Command center for YouTube research packs")
 
         with ui.grid(columns=2).classes("w-full gap-4"):
             with ui.card().classes("ytis-card p-5 w-full"):
-                ui.label("Current Project").classes("text-xl font-bold")
+                with ui.row().classes("w-full justify-between items-center"):
+                    ui.label("Current Project").classes("text-xl font-bold")
+                    if project:
+                        color = "text-green-400" if hygiene_status == "clean" else "text-yellow-400" if hygiene_status == "review" else "text-red-400"
+                        ui.label(hygiene_status.upper()).classes(f"text-xs font-bold {color}")
                 if not project:
                     ui.label("No current project yet.").classes("text-slate-400")
                     ui.button("Build first pack", icon="rocket_launch", on_click=lambda: ui.navigate.to("/build"), color="primary")
@@ -75,38 +87,46 @@ def render_dashboard(state: AppState) -> None:
 
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Next Action").classes("text-xl font-bold")
-                ui.label(_next_action(project)).classes("text-base text-slate-200")
+                ui.label(_next_action(project, hygiene_status)).classes("text-base text-slate-200")
+                ui.separator().classes("bg-slate-700 my-3")
+
+                ui.label("Project Hygiene").classes("font-bold")
+                if hygiene:
+                    ui.label(hygiene.issue_text()).classes("text-sm text-slate-400")
+                    with ui.row().classes("gap-2 mt-2"):
+                        ui.button("Open Projects", icon="folder", on_click=lambda: ui.navigate.to("/projects"), color="primary")
+                        ui.button("Search", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline")
+                else:
+                    ui.label("No hygiene report available yet.").classes("text-slate-400")
+
                 ui.separator().classes("bg-slate-700 my-3")
                 ui.label("Quick Search").classes("font-bold")
                 quick_query = ui.input("Search this project's transcripts").classes("w-full")
                 with ui.row().classes("gap-2"):
-                    def go_search() -> None:
-                        # Query is not passed yet; Search page opens ready for the selected project.
-                        ui.navigate.to("/search")
-                    ui.button("Search", icon="search", on_click=go_search, color="primary")
+                    ui.button("Search", icon="search", on_click=lambda: ui.navigate.to("/search"), color="primary")
                     combined_md = _find_first_combined_md(project)
                     if combined_md:
                         ui.button("Open Combined MD", icon="description", on_click=lambda p=combined_md: open_path(p)).props("outline")
                     else:
                         ui.button("Open Combined MD", icon="description").props("outline disable")
-                ui.label("Search page is still the deep search area. This box is a dashboard shortcut.").classes("text-xs text-slate-500")
+                ui.label("Search page is the deep search area. This box is a dashboard shortcut.").classes("text-xs text-slate-500")
 
         with ui.grid(columns=3).classes("w-full gap-4"):
             with ui.card().classes("ytis-card p-5 w-full"):
-                ui.label("Pack Status").classes("text-xl font-bold")
-                if project:
-                    rows = [
-                        ("Project folder", short_path(project.get("project_dir", "-"), 56)),
-                        ("ZIP path", short_path(project.get("zip_path", "-"), 56)),
-                        ("Language", val(project, "language", "-")),
-                        ("Words", fmt_int(project.get("total_words"))),
-                    ]
-                    for key, value in rows:
-                        with ui.row().classes("w-full justify-between gap-3 border-b border-slate-800 py-1"):
-                            ui.label(key).classes("text-sm text-slate-400")
-                            ui.label(value).classes("text-sm text-right break-all")
-                else:
-                    ui.label("No status available.").classes("text-slate-400")
+                ui.label("Project Library Status").classes("text-xl font-bold")
+                clean_count = sum(1 for p in audited_projects if p.get("_hygiene_status") == "clean")
+                review_count = sum(1 for p in audited_projects if p.get("_hygiene_status") == "review")
+                broken_count = sum(1 for p in audited_projects if p.get("_hygiene_status") == "broken")
+                rows = [
+                    ("Projects", str(len(audited_projects))),
+                    ("Clean", str(clean_count)),
+                    ("Review", str(review_count)),
+                    ("Broken", str(broken_count)),
+                ]
+                for key, value in rows:
+                    with ui.row().classes("w-full justify-between gap-3 border-b border-slate-800 py-1"):
+                        ui.label(key).classes("text-sm text-slate-400")
+                        ui.label(value).classes("text-sm font-bold")
 
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Analysis Shortcuts").classes("text-xl font-bold")
