@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import re
 import shutil
 import zipfile
 from dataclasses import dataclass
@@ -8,22 +10,21 @@ from pathlib import Path
 from typing import Any
 
 
-def as_int(value: Any) -> int:
-    try:
-        if value is None or value == "":
-            return 0
-        return int(float(str(value).replace(",", "").strip()))
-    except Exception:
-        return 0
-
-
-def compact(value: Any) -> str:
-    n = as_int(value)
-    if abs(n) >= 1_000_000:
-        return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
-    if abs(n) >= 1_000:
-        return f"{n / 1_000:.1f}k".replace(".0k", "k")
-    return f"{n:,}"
+TOPIC_KEYWORDS: dict[str, list[str]] = {
+    "Pricing": ["pricing", "price", "prices", "charge", "charging", "fee", "fees", "retainer", "budget", "quote", "proposal"],
+    "Offer": ["offer", "offers", "guarantee", "guaranteed", "package", "positioning", "promise", "value proposition"],
+    "Lead generation": ["lead generation", "leads", "prospects", "prospecting", "appointments", "booked", "pipeline", "demand"],
+    "Sales call": ["sales call", "discovery call", "call", "closing", "close", "sales process", "objection", "objections"],
+    "Cold email": ["cold email", "email outreach", "outreach", "cold outreach", "inbox", "reply", "sequence"],
+    "Funnel": ["funnel", "funnels", "landing page", "opt-in", "conversion", "webinar", "lead magnet"],
+    "Agency": ["agency", "agencies", "client work", "done for you", "service business"],
+    "MSP": ["msp", "managed service", "managed services", "it services", "it support", "technology company"],
+    "Niche": ["niche", "vertical", "industry", "market", "target market", "specialize", "specialise"],
+    "Onboarding": ["onboarding", "onboard", "client onboarding", "handoff", "kickoff", "implementation"],
+    "Content": ["content", "youtube", "linkedin", "post", "posts", "personal brand", "social media"],
+    "Ads": ["ads", "advertising", "google ads", "facebook ads", "paid ads", "campaign", "ad spend"],
+    "Workflow": ["workflow", "process", "system", "sop", "framework", "steps", "checklist", "automation"],
+}
 
 
 @dataclass
@@ -43,6 +44,34 @@ class BundleResult:
     readme_path: Path
     included_zips: list[Path]
     skipped_projects: list[str]
+
+
+@dataclass
+class TopicHit:
+    project: str
+    topic: str
+    file_name: str
+    file_path: str
+    matches: int
+    snippet: str
+
+
+def as_int(value: Any) -> int:
+    try:
+        if value is None or value == "":
+            return 0
+        return int(float(str(value).replace(",", "").strip()))
+    except Exception:
+        return 0
+
+
+def compact(value: Any) -> str:
+    n = as_int(value)
+    if abs(n) >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
+    if abs(n) >= 1_000:
+        return f"{n / 1_000:.1f}k".replace(".0k", "k")
+    return f"{n:,}"
 
 
 def summarize(projects: list[dict[str, Any]]) -> LibraryStats:
@@ -84,12 +113,126 @@ def ranked_projects(projects: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(items, key=lambda p: as_int(p.get("total_words")), reverse=True)
 
 
+def _clean_txt_files(project: dict[str, Any]) -> list[Path]:
+    project_dir = Path(str(project.get("project_dir", "")))
+    clean_dir = project_dir / "clean_txt"
+    if not clean_dir.exists():
+        return []
+    return sorted(clean_dir.glob("*.txt"))
+
+
+def _snippet(text: str, keyword: str, radius: int = 150) -> str:
+    lower = text.lower()
+    idx = lower.find(keyword.lower())
+    if idx < 0:
+        return ""
+    start = max(0, idx - radius)
+    end = min(len(text), idx + len(keyword) + radius)
+    snippet = text[start:end].replace("\n", " ")
+    snippet = re.sub(r"\s+", " ", snippet).strip()
+    return ("..." if start else "") + snippet + ("..." if end < len(text) else "")
+
+
+def scan_topic_matrix(projects: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[TopicHit]]:
+    project_names = [str(p.get("name", "Unnamed")) for p in projects]
+    matrix: dict[str, dict[str, int]] = {
+        topic: {project_name: 0 for project_name in project_names}
+        for topic in TOPIC_KEYWORDS
+    }
+    evidence: list[TopicHit] = []
+
+    for project in projects:
+        project_name = str(project.get("name", "Unnamed"))
+        for path in _clean_txt_files(project):
+            try:
+                text = path.read_text(encoding="utf-8-sig", errors="replace")
+            except Exception:
+                continue
+            lower = text.lower()
+
+            for topic, keywords in TOPIC_KEYWORDS.items():
+                count = 0
+                best_keyword = ""
+                for keyword in keywords:
+                    hits = lower.count(keyword.lower())
+                    if hits:
+                        count += hits
+                        if not best_keyword:
+                            best_keyword = keyword
+                if count:
+                    matrix[topic][project_name] = matrix[topic].get(project_name, 0) + count
+                    evidence.append(
+                        TopicHit(
+                            project=project_name,
+                            topic=topic,
+                            file_name=path.name,
+                            file_path=str(path),
+                            matches=count,
+                            snippet=_snippet(text, best_keyword or keywords[0]),
+                        )
+                    )
+
+    rows: list[dict[str, Any]] = []
+    for topic, project_counts in matrix.items():
+        total = sum(project_counts.values())
+        strongest_project = "-"
+        strongest_count = 0
+        if project_counts:
+            strongest_project, strongest_count = max(project_counts.items(), key=lambda item: item[1])
+        row = {
+            "Topic": topic,
+            "Total": total,
+            "Strongest": strongest_project if strongest_count else "-",
+        }
+        for project_name in project_names:
+            row[project_name] = project_counts.get(project_name, 0)
+        rows.append(row)
+
+    rows.sort(key=lambda row: int(row["Total"]), reverse=True)
+    evidence.sort(key=lambda item: item.matches, reverse=True)
+    return rows, evidence
+
+
+def export_topic_matrix(matrix_rows: list[dict[str, Any]], downloads_dir: Path) -> Path:
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = downloads_dir / f"YTIS_TOPIC_MATRIX_{stamp}.csv"
+    if not matrix_rows:
+        path.write_text("", encoding="utf-8")
+        return path
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=list(matrix_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(matrix_rows)
+    return path
+
+
+def export_topic_evidence(evidence: list[TopicHit], downloads_dir: Path) -> Path:
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = downloads_dir / f"YTIS_TOPIC_EVIDENCE_{stamp}.csv"
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=["project", "topic", "file_name", "file_path", "matches", "snippet"])
+        writer.writeheader()
+        for item in evidence:
+            writer.writerow({
+                "project": item.project,
+                "topic": item.topic,
+                "file_name": item.file_name,
+                "file_path": item.file_path,
+                "matches": item.matches,
+                "snippet": item.snippet,
+            })
+    return path
+
+
 def generate_prompt(projects: list[dict[str, Any]], focus: str) -> str:
     stats = summarize(projects)
     ranked = ranked_projects(projects)
-    rows = []
+    matrix_rows, _ = scan_topic_matrix(projects)
+    top_topics = matrix_rows[:8]
+
+    project_rows = []
     for p in ranked:
-        rows.append(
+        project_rows.append(
             f"- {p.get('name', 'Unnamed')}: "
             f"{as_int(p.get('videos_found'))} videos, "
             f"{as_int(p.get('transcripts_created'))} transcripts, "
@@ -97,6 +240,10 @@ def generate_prompt(projects: list[dict[str, Any]], focus: str) -> str:
             f"strength={strength(p)}, "
             f"ZIP={p.get('zip_path', '-')}"
         )
+
+    topic_rows = []
+    for row in top_topics:
+        topic_rows.append(f"- {row['Topic']}: {row['Total']} matches, strongest={row['Strongest']}")
 
     focus = focus.strip() or "Compare all uploaded YTIS packs for business lessons, workflows, service ideas, pricing, offers, and sales patterns."
 
@@ -113,7 +260,10 @@ Library context:
 - ZIP-ready projects: {stats.zip_ready}
 
 Projects:
-{chr(10).join(rows)}
+{chr(10).join(project_rows)}
+
+Local topic scan summary:
+{chr(10).join(topic_rows) if topic_rows else "- No topic scan data available."}
 
 Analysis focus:
 {focus}
@@ -121,6 +271,7 @@ Analysis focus:
 Instructions:
 - Use the uploaded ZIP files as the primary source.
 - Compare the projects/channels against each other.
+- Validate or challenge the local topic scan using the transcript evidence.
 - Identify repeated advice across multiple creators.
 - Separate common advice from unique advice.
 - Prefer concrete workflows, examples, service ideas, offer/pricing logic, sales processes, and operational systems.
@@ -132,11 +283,12 @@ Output format:
 1. Executive summary.
 2. Project-by-project comparison table.
 3. Strongest repeated lessons across all projects.
-4. Unique or contradictory lessons.
-5. Workflow inventory across the library.
-6. Offer/pricing/service ideas relevant to Rafael Alba and Webify Digital Solutions.
-7. What to ignore or verify.
-8. Practical 30-day action plan.
+4. Topic-by-topic comparison.
+5. Unique or contradictory lessons.
+6. Workflow inventory across the library.
+7. Offer/pricing/service ideas relevant to Rafael Alba and Webify Digital Solutions.
+8. What to ignore or verify.
+9. Practical 30-day action plan.
 """
 
 
@@ -154,6 +306,24 @@ def create_library_upload_bundle(projects: list[dict[str, Any]], focus: str, dow
     prompt_text = generate_prompt(projects, focus)
     prompt_path = bundle_root / "YTIS_MULTI_PROJECT_ANALYSIS_PROMPT.md"
     prompt_path.write_text(prompt_text, encoding="utf-8")
+
+    matrix_rows, evidence = scan_topic_matrix(projects)
+    matrix_path = bundle_root / "YTIS_TOPIC_MATRIX.csv"
+    evidence_path = bundle_root / "YTIS_TOPIC_EVIDENCE.csv"
+
+    if matrix_rows:
+        with matrix_path.open("w", encoding="utf-8", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(matrix_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(matrix_rows)
+    else:
+        matrix_path.write_text("", encoding="utf-8")
+
+    with evidence_path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=["project", "topic", "file_name", "file_path", "matches", "snippet"])
+        writer.writeheader()
+        for item in evidence:
+            writer.writerow(item.__dict__)
 
     stats = summarize(projects)
     zip_dir = bundle_root / "research_packs"
@@ -191,11 +361,16 @@ Library summary:
 - Words: {stats.words:,}
 - Missing subtitles: {stats.missing}
 
+Included analysis helpers:
+- YTIS_MULTI_PROJECT_ANALYSIS_PROMPT.md
+- YTIS_TOPIC_MATRIX.csv
+- YTIS_TOPIC_EVIDENCE.csv
+
 How to use:
-1. Upload this whole bundle ZIP to ChatGPT, or upload the ZIP files inside `research_packs`.
+1. Upload this bundle ZIP to ChatGPT, or upload the ZIP files inside `research_packs`.
 2. Open `YTIS_MULTI_PROJECT_ANALYSIS_PROMPT.md`.
 3. Paste the prompt after uploading the research packs.
-4. Ask ChatGPT to use the uploaded files as the primary source.
+4. Use the topic matrix/evidence CSV files as navigation aids, not as final truth.
 
 Included research packs:
 {chr(10).join(f"- {p.name}" for p in included) or "- None"}
@@ -212,10 +387,4 @@ Skipped:
             if path.is_file():
                 zf.write(path, path.relative_to(bundle_root))
 
-    return BundleResult(
-        bundle_path=bundle_zip,
-        prompt_path=prompt_path,
-        readme_path=readme,
-        included_zips=included,
-        skipped_projects=skipped,
-    )
+    return BundleResult(bundle_zip, prompt_path, readme, included, skipped)
