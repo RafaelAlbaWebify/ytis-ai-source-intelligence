@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,36 @@ def _project_root(state: AppState) -> Path:
     return Path(getattr(state, "project_root", "") or Path.cwd())
 
 
+def _state_dir(project_root: Path) -> Path:
+    path = project_root / "ytis_state"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _current_mission_state_path(project_root: Path) -> Path:
+    return _state_dir(project_root) / "current_mission.json"
+
+
+def _read_current_mission_id(project_root: Path) -> str:
+    path = _current_mission_state_path(project_root)
+    if not path.exists():
+        return ""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+        return str(data.get("mission_id") or "")
+    except Exception:
+        return ""
+
+
+def _write_current_mission_id(project_root: Path, mission_id: str) -> None:
+    path = _current_mission_state_path(project_root)
+    data = {
+        "mission_id": mission_id,
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
 def _copy_to_clipboard(text: str) -> None:
     ui.run_javascript(f"navigator.clipboard.writeText({json.dumps(text or '')})")
 
@@ -76,6 +107,53 @@ def _get_attr(obj: Any, name: str, default: Any = "") -> Any:
     if isinstance(obj, dict):
         return obj.get(name, default)
     return getattr(obj, name, default)
+
+
+def _mission_metadata_path(mission: Any) -> Path | None:
+    path = _get_attr(mission, "metadata_path", None)
+    if path:
+        return Path(path)
+    folder = _get_attr(mission, "folder", None)
+    if folder:
+        return Path(folder) / "mission.json"
+    return None
+
+
+def _read_mission_json(mission: Any) -> dict[str, Any]:
+    path = _mission_metadata_path(mission)
+    if not path or not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return {}
+
+
+def _write_mission_json(mission: Any, data: dict[str, Any]) -> None:
+    path = _mission_metadata_path(mission)
+    if not path:
+        raise RuntimeError("Mission metadata path not found")
+    data["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _rename_mission(mission: Any, new_name: str) -> None:
+    data = _read_mission_json(mission)
+    if not data:
+        raise RuntimeError("Could not read mission metadata")
+    clean = (new_name or "").strip()
+    if not clean:
+        raise RuntimeError("Mission name cannot be empty")
+    data["name"] = clean
+    _write_mission_json(mission, data)
+
+
+def _set_mission_status(mission: Any, status: str) -> None:
+    data = _read_mission_json(mission)
+    if not data:
+        raise RuntimeError("Could not read mission metadata")
+    data["status"] = status
+    _write_mission_json(mission, data)
 
 
 def _load_runtime(project_root: Path, state: AppState) -> dict[str, Any]:
@@ -111,7 +189,12 @@ def _load_runtime(project_root: Path, state: AppState) -> dict[str, Any]:
     return data
 
 
-def _select_current_mission(missions: list[Any]) -> Any | None:
+def _select_current_mission(project_root: Path, missions: list[Any]) -> Any | None:
+    current_id = _read_current_mission_id(project_root)
+    if current_id:
+        for mission in missions:
+            if str(_get_attr(mission, "mission_id", "")) == current_id and _get_attr(mission, "status", "") != "archived":
+                return mission
     active = [m for m in missions if _get_attr(m, "status", "") == "active"]
     if active:
         return active[0]
@@ -119,6 +202,19 @@ def _select_current_mission(missions: list[Any]) -> Any | None:
     if visible:
         return visible[0]
     return missions[0] if missions else None
+
+
+def _mission_select_options(missions: list[Any]) -> dict[str, str]:
+    options: dict[str, str] = {}
+    visible = [m for m in missions if _get_attr(m, "status", "") != "archived"]
+    for mission in visible:
+        created = str(_get_attr(mission, "created_at", ""))[:16]
+        status = str(_get_attr(mission, "status", ""))
+        name = str(_get_attr(mission, "name", "Untitled mission"))
+        mission_id = str(_get_attr(mission, "mission_id", ""))
+        label = f"{name} | {status} | {created}"
+        options[label] = mission_id
+    return options
 
 
 def _progress_for_mission(records: list[Any], mission: Any) -> dict[str, int]:
@@ -170,17 +266,16 @@ def _prompt_for_analysis_step(mission: Any, projects: list[dict[str, Any]], anal
         )
 
 
-def _duplicate_mission_names(missions: list[Any]) -> set[str]:
-    seen: set[str] = set()
-    duplicates: set[str] = set()
+def _duplicate_name_groups(missions: list[Any]) -> dict[str, list[Any]]:
+    groups: dict[str, list[Any]] = {}
     for mission in missions:
+        if _get_attr(mission, "status", "") == "archived":
+            continue
         key = str(_get_attr(mission, "name", "")).strip().lower()
         if not key:
             continue
-        if key in seen:
-            duplicates.add(key)
-        seen.add(key)
-    return duplicates
+        groups.setdefault(key, []).append(mission)
+    return {k: v for k, v in groups.items() if len(v) > 1}
 
 
 def _mission_records(records: list[Any], mission: Any) -> list[Any]:
@@ -206,6 +301,21 @@ def _progress_badges(progress: dict[str, int], current_step: str) -> None:
                 ui.badge("-- " + text).props("color=grey")
 
 
+def _archive_duplicate_missions(project_root: Path, missions: list[Any], keep_mission: Any) -> int:
+    keep_id = str(_get_attr(keep_mission, "mission_id", ""))
+    keep_name = str(_get_attr(keep_mission, "name", "")).strip().lower()
+    count = 0
+    for mission in missions:
+        mission_id = str(_get_attr(mission, "mission_id", ""))
+        name = str(_get_attr(mission, "name", "")).strip().lower()
+        status = str(_get_attr(mission, "status", ""))
+        if mission_id != keep_id and name == keep_name and status != "archived":
+            _set_mission_status(mission, "archived")
+            count += 1
+    _write_current_mission_id(project_root, keep_id)
+    return count
+
+
 def _render_dashboard_body(state: AppState) -> None:
     project_root = _project_root(state)
     runtime = _load_runtime(project_root, state)
@@ -216,7 +326,7 @@ def _render_dashboard_body(state: AppState) -> None:
     labels = runtime["step_labels"]
     stats = runtime["stats"]
 
-    mission = _select_current_mission(missions)
+    mission = _select_current_mission(project_root, missions)
 
     with ui.column().classes("ytis-page gap-2"):
         with ui.row().classes("w-full justify-between items-center"):
@@ -241,14 +351,18 @@ def _render_dashboard_body(state: AppState) -> None:
                 ui.button("Create Mission", icon="flag", on_click=lambda: ui.navigate.to("/missions"), color="primary")
             return
 
+        _write_current_mission_id(project_root, str(_get_attr(mission, "mission_id", "")))
+
         progress = _progress_for_mission(records, mission)
         next_step = _next_pending_step(progress)
         next_label = labels.get(next_step, STEP_LABELS_FALLBACK.get(next_step, "All steps complete")) if next_step else "All steps complete"
         selected_projects = _selected_project_records(mission, projects)
         prompt = _prompt_for_analysis_step(mission, selected_projects, next_step)
         linked = _mission_records(records, mission)
-        duplicates = _duplicate_mission_names(missions)
+        duplicate_groups = _duplicate_name_groups(missions)
+        has_current_duplicates = str(_get_attr(mission, "name", "")).strip().lower() in duplicate_groups
         done = _done_count(progress)
+        options = _mission_select_options(missions)
 
         with ui.card().classes("ytis-card p-3 w-full"):
             with ui.row().classes("w-full items-center justify-between gap-3"):
@@ -258,9 +372,24 @@ def _render_dashboard_body(state: AppState) -> None:
                 with ui.row().classes("gap-1 items-center"):
                     ui.badge(f"{done}/5 done").props("color=blue")
                     ui.button("Manager", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
+            with ui.row().classes("w-full items-center gap-2 mt-1"):
+                if options:
+                    selector = ui.select(options=options, value=str(_get_attr(mission, "mission_id", "")), label="Current mission").classes("flex-1")
+                    selector.props("dense")
+                    selector.on("update:model-value", lambda e: (_write_current_mission_id(project_root, str(e.args)), ui.navigate.to("/")))
+                ui.button("Set Current", icon="push_pin", on_click=lambda: (_write_current_mission_id(project_root, str(_get_attr(mission, "mission_id", ""))), ui.notify("Current mission saved", type="positive"))).props("outline dense")
             _progress_badges(progress, next_step)
-            if duplicates:
-                ui.label("Duplicate mission names detected: " + ", ".join(sorted(duplicates))).classes("text-xs text-orange-300")
+            if has_current_duplicates:
+                with ui.row().classes("gap-2 items-center"):
+                    ui.label("Duplicate active mission name detected for this mission.").classes("text-xs text-orange-300")
+                    ui.button(
+                        "Archive duplicates",
+                        icon="archive",
+                        on_click=lambda: (
+                            ui.notify(f"Archived {_archive_duplicate_missions(project_root, missions, mission)} duplicate mission(s)", type="positive"),
+                            ui.timer(0.5, lambda: ui.navigate.to("/"), once=True),
+                        ),
+                    ).props("outline dense")
 
         with ui.card().classes("ytis-card p-3 w-full"):
             with ui.row().classes("items-center gap-2 flex-wrap"):
@@ -341,8 +470,39 @@ def _render_dashboard_body(state: AppState) -> None:
                 else:
                     ui.label("No pending step to save.").classes("text-green-300")
 
-        with ui.expansion("Details: sources, saved answers, system", icon="tune", value=False).classes("ytis-card w-full text-white").props("dense"):
-            with ui.grid(columns=3).classes("w-full gap-3 p-3"):
+        with ui.expansion("Details: lifecycle, sources, saved answers, system", icon="tune", value=False).classes("ytis-card w-full text-white").props("dense"):
+            with ui.grid(columns=4).classes("w-full gap-3 p-3"):
+                with ui.card().classes("ytis-mini-card p-3 w-full"):
+                    ui.label("Mission lifecycle").classes("font-bold")
+                    rename_input = ui.input("Rename current mission", value=str(_get_attr(mission, "name", ""))).classes("w-full").props("dense")
+                    with ui.row().classes("gap-1"):
+                        ui.button(
+                            "Rename",
+                            icon="edit",
+                            on_click=lambda: (
+                                _rename_mission(mission, rename_input.value or ""),
+                                ui.notify("Mission renamed", type="positive"),
+                                ui.timer(0.5, lambda: ui.navigate.to("/"), once=True),
+                            ),
+                        ).props("outline dense")
+                        ui.button(
+                            "Archive current",
+                            icon="archive",
+                            on_click=lambda: (
+                                _set_mission_status(mission, "archived"),
+                                ui.notify("Mission archived", type="positive"),
+                                ui.timer(0.5, lambda: ui.navigate.to("/"), once=True),
+                            ),
+                        ).props("outline dense")
+                    if has_current_duplicates:
+                        ui.button(
+                            "Archive duplicate missions",
+                            icon="cleaning_services",
+                            on_click=lambda: (
+                                ui.notify(f"Archived {_archive_duplicate_missions(project_root, missions, mission)} duplicate mission(s)", type="positive"),
+                                ui.timer(0.5, lambda: ui.navigate.to("/"), once=True),
+                            ),
+                        ).props("outline dense")
                 with ui.card().classes("ytis-mini-card p-3 w-full"):
                     ui.label("Sources").classes("font-bold")
                     if not selected_projects:
@@ -356,14 +516,14 @@ def _render_dashboard_body(state: AppState) -> None:
                     ui.label("Saved answers").classes("font-bold")
                     if not linked:
                         ui.label("No saved answers for this mission.").classes("text-sm text-slate-400")
-                    for record in linked[:6]:
+                    for record in linked[:5]:
                         title = str(_get_attr(record, "title", "Untitled"))
                         step = str(_get_attr(record, "chain_step", ""))
                         ui.label(title).classes("text-sm font-bold")
                         ui.label(step).classes("text-xs text-slate-400")
                 with ui.card().classes("ytis-mini-card p-3 w-full"):
                     ui.label("System").classes("font-bold")
-                    ui.label(f"Missions: {stats.get('missions', len(missions))} | Active: {stats.get('active', 0)}").classes("text-sm")
+                    ui.label(f"Missions: {stats.get('missions', len(missions))} | Active: {stats.get('active', 0)} | Archived: {stats.get('archived', 0)}").classes("text-sm")
                     ui.label(f"Projects: {len(projects)} | Analyses: {len(records)}").classes("text-sm")
                     with ui.row().classes("gap-1 mt-1"):
                         ui.button("Analysis", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox")).props("outline dense")
