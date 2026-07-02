@@ -27,6 +27,14 @@ STEP_LABELS_FALLBACK = {
     "STEP_05_validation_plan": "Step 5 - Validation plan",
 }
 
+STEP_SHORT_LABELS = {
+    "STEP_01_extract_map": "1 Map",
+    "STEP_02_compare_patterns": "2 Compare",
+    "STEP_03_extract_workflows": "3 Workflows",
+    "STEP_04_apply_to_rafael_webify": "4 Apply",
+    "STEP_05_validation_plan": "5 Validate",
+}
+
 STEP_TO_TOPIC = {
     "STEP_01_extract_map": "All topics",
     "STEP_02_compare_patterns": "Offer",
@@ -113,7 +121,7 @@ def _select_current_mission(missions: list[Any]) -> Any | None:
     return missions[0] if missions else None
 
 
-def _progress_for_mission(project_root: Path, records: list[Any], mission: Any) -> dict[str, int]:
+def _progress_for_mission(records: list[Any], mission: Any) -> dict[str, int]:
     try:
         from ytis.core.analysis_inbox import mission_chain_progress
         return mission_chain_progress(records, _get_attr(mission, "mission_id", ""))
@@ -180,12 +188,22 @@ def _mission_records(records: list[Any], mission: Any) -> list[Any]:
     return [r for r in records if _get_attr(r, "mission_id", "") == mission_id]
 
 
-def _progress_badges(progress: dict[str, int], labels: dict[str, str]) -> None:
+def _done_count(progress: dict[str, int]) -> int:
+    return sum(1 for step in CHAIN_ORDER if progress.get(step, 0) > 0)
+
+
+def _progress_badges(progress: dict[str, int], current_step: str) -> None:
     with ui.row().classes("gap-1 flex-wrap"):
         for step in CHAIN_ORDER:
             done = progress.get(step, 0) > 0
-            label = labels.get(step, STEP_LABELS_FALLBACK.get(step, step)).replace("Step ", "")
-            ui.badge(("OK " if done else "-- ") + label).props("color=green" if done else "color=grey")
+            current = step == current_step
+            text = STEP_SHORT_LABELS.get(step, step)
+            if done:
+                ui.badge("OK " + text).props("color=green")
+            elif current:
+                ui.badge("NOW " + text).props("color=cyan")
+            else:
+                ui.badge("-- " + text).props("color=grey")
 
 
 def _render_dashboard_body(state: AppState) -> None:
@@ -200,77 +218,88 @@ def _render_dashboard_body(state: AppState) -> None:
 
     mission = _select_current_mission(missions)
 
-    with ui.column().classes("ytis-page gap-3"):
+    with ui.column().classes("ytis-page gap-2"):
         with ui.row().classes("w-full justify-between items-center"):
             with ui.column().classes("gap-0"):
-                ui.label("YTIS Dashboard").classes("text-3xl font-bold")
-                ui.label("Compact workflow: copy prompt, run ChatGPT, paste answer, save and advance.").classes("text-sm text-slate-400")
-            with ui.row().classes("gap-2"):
+                ui.label("YTIS Dashboard").classes("text-2xl font-bold")
+                ui.label("Copy -> ChatGPT -> Paste -> Save").classes("text-xs text-slate-400")
+            with ui.row().classes("gap-1"):
                 ui.button("Missions", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
                 ui.button("Build", icon="construction", on_click=lambda: ui.navigate.to("/build")).props("outline dense")
                 ui.button("Search", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline dense")
 
         if runtime["errors"]:
             with ui.expansion("Dashboard warnings", icon="warning", value=False).classes("ytis-card w-full text-white").props("dense"):
-                with ui.column().classes("p-3 gap-1"):
+                with ui.column().classes("p-2 gap-1"):
                     for error in runtime["errors"]:
                         ui.label(error).classes("text-sm text-orange-300")
 
         if not mission:
-            with ui.card().classes("ytis-card p-5 w-full"):
-                ui.label("No mission available").classes("text-2xl font-bold")
-                ui.label("Create a mission first. The dashboard will then show the compact workflow.").classes("text-slate-400")
+            with ui.card().classes("ytis-card p-4 w-full"):
+                ui.label("No mission available").classes("text-xl font-bold")
+                ui.label("Create a mission first. Then the dashboard becomes the normal working screen.").classes("text-slate-400")
                 ui.button("Create Mission", icon="flag", on_click=lambda: ui.navigate.to("/missions"), color="primary")
             return
 
-        progress = _progress_for_mission(project_root, records, mission)
+        progress = _progress_for_mission(records, mission)
         next_step = _next_pending_step(progress)
         next_label = labels.get(next_step, STEP_LABELS_FALLBACK.get(next_step, "All steps complete")) if next_step else "All steps complete"
         selected_projects = _selected_project_records(mission, projects)
         prompt = _prompt_for_analysis_step(mission, selected_projects, next_step)
         linked = _mission_records(records, mission)
         duplicates = _duplicate_mission_names(missions)
+        done = _done_count(progress)
 
-        with ui.card().classes("ytis-card p-4 w-full"):
-            with ui.row().classes("w-full justify-between items-start gap-3"):
-                with ui.column().classes("gap-1 flex-1"):
-                    ui.label("Current mission").classes("text-xs text-slate-400")
-                    ui.label(str(_get_attr(mission, "name", "Untitled mission"))).classes("text-2xl font-bold")
-                    ui.label("Next: " + next_label).classes("text-lg font-bold text-cyan-300")
-                    goal = str(_get_attr(mission, "goal", "") or "")
-                    if goal:
-                        ui.label(goal).classes("text-sm text-slate-300")
-                with ui.column().classes("gap-2"):
-                    ui.button("Mission Manager", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
-                    folder = _get_attr(mission, "folder", None)
-                    if folder:
-                        from ytis.ui.components import open_path
-                        ui.button("Open Folder", icon="folder_open", on_click=lambda p=folder: open_path(p)).props("outline dense")
-            _progress_badges(progress, labels)
+        with ui.card().classes("ytis-card p-3 w-full"):
+            with ui.row().classes("w-full items-center justify-between gap-3"):
+                with ui.column().classes("gap-0 flex-1"):
+                    ui.label(str(_get_attr(mission, "name", "Untitled mission"))).classes("text-xl font-bold")
+                    ui.label(f"Next action: {next_label}").classes("text-base font-bold text-cyan-300")
+                with ui.row().classes("gap-1 items-center"):
+                    ui.badge(f"{done}/5 done").props("color=blue")
+                    ui.button("Manager", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
+            _progress_badges(progress, next_step)
             if duplicates:
-                ui.label("Duplicate mission names: " + ", ".join(sorted(duplicates))).classes("text-xs text-orange-300")
+                ui.label("Duplicate mission names detected: " + ", ".join(sorted(duplicates))).classes("text-xs text-orange-300")
+
+        with ui.card().classes("ytis-card p-3 w-full"):
+            with ui.row().classes("items-center gap-2 flex-wrap"):
+                ui.badge("1 Copy prompt").props("color=blue")
+                ui.label("->").classes("text-slate-400")
+                ui.badge("2 Run in ChatGPT").props("color=blue")
+                ui.label("->").classes("text-slate-400")
+                ui.badge("3 Paste answer").props("color=blue")
+                ui.label("->").classes("text-slate-400")
+                ui.badge("4 Save and advance").props("color=green")
 
         with ui.grid(columns=2).classes("w-full gap-3"):
             with ui.card().classes("ytis-card p-4 w-full"):
-                ui.label("1. Prompt to send to ChatGPT").classes("text-xl font-bold")
-                ui.label(next_label).classes("text-sm text-cyan-300")
+                with ui.row().classes("w-full justify-between items-center"):
+                    with ui.column().classes("gap-0"):
+                        ui.label("Prompt").classes("text-xl font-bold")
+                        ui.label(next_label).classes("text-xs text-cyan-300")
+                    if next_step:
+                        ui.button("Copy Prompt", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt), ui.notify("Prompt copied", type="positive")), color="primary").props("dense")
                 if next_step:
-                    prompt_box = ui.textarea(value=prompt).classes("w-full").props("rows=16")
-                    prompt_box.style("font-family: Consolas, monospace; font-size: 12px; line-height: 1.35;")
-                    with ui.row().classes("gap-2"):
-                        ui.button("Copy Prompt", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Prompt copied", type="positive")), color="primary")
-                        ui.button("Open ChatGPT", icon="open_in_new", on_click=_open_chatgpt).props("outline")
+                    prompt_box = ui.textarea(value=prompt).classes("w-full").props("rows=13")
+                    prompt_box.style("font-family: Consolas, monospace; font-size: 12px; line-height: 1.3;")
+                    with ui.row().classes("gap-1"):
+                        ui.button("Copy Prompt", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Prompt copied", type="positive"))).props("outline dense")
+                        ui.button("Open ChatGPT", icon="open_in_new", on_click=_open_chatgpt).props("outline dense")
                 else:
                     ui.label("All mission steps have saved answers.").classes("text-green-300")
 
             with ui.card().classes("ytis-card p-4 w-full"):
-                ui.label("2. Paste ChatGPT answer").classes("text-xl font-bold")
+                with ui.row().classes("w-full justify-between items-center"):
+                    with ui.column().classes("gap-0"):
+                        ui.label("Answer").classes("text-xl font-bold")
+                        ui.label("Paste ChatGPT result here").classes("text-xs text-slate-400")
                 if next_step:
                     title_default = f"{_get_attr(mission, 'name', 'Mission')} - {next_label}"
-                    title_input = ui.input("Title", value=title_default).classes("w-full")
-                    answer_box = ui.textarea("Paste answer here").classes("w-full").props("rows=16")
-                    notes_box = ui.textarea("Notes optional").classes("w-full").props("rows=2")
-                    status_label = ui.label("Ready.").classes("text-xs text-slate-400")
+                    title_input = ui.input("Title", value=title_default).classes("w-full").props("dense")
+                    answer_box = ui.textarea("Paste answer here").classes("w-full").props("rows=11")
+                    notes_box = ui.textarea("Notes optional").classes("w-full").props("rows=1")
+                    status_label = ui.label("Ready to save.").classes("text-xs text-slate-400")
 
                     def do_save() -> None:
                         text = answer_box.value or ""
@@ -306,11 +335,13 @@ def _render_dashboard_body(state: AppState) -> None:
                             status_label.classes(add="text-red-300")
                             status_label.update()
 
-                    ui.button("Save and Advance", icon="save", on_click=do_save, color="primary")
+                    with ui.row().classes("gap-2 w-full"):
+                        ui.button("Save and Advance", icon="save", on_click=do_save, color="primary").classes("flex-1")
+                        ui.button("Clear", icon="backspace", on_click=lambda: (setattr(answer_box, "value", ""), answer_box.update())).props("outline")
                 else:
                     ui.label("No pending step to save.").classes("text-green-300")
 
-        with ui.expansion("Details", icon="tune", value=False).classes("ytis-card w-full text-white").props("dense"):
+        with ui.expansion("Details: sources, saved answers, system", icon="tune", value=False).classes("ytis-card w-full text-white").props("dense"):
             with ui.grid(columns=3).classes("w-full gap-3 p-3"):
                 with ui.card().classes("ytis-mini-card p-3 w-full"):
                     ui.label("Sources").classes("font-bold")
@@ -326,12 +357,17 @@ def _render_dashboard_body(state: AppState) -> None:
                     if not linked:
                         ui.label("No saved answers for this mission.").classes("text-sm text-slate-400")
                     for record in linked[:6]:
-                        ui.label(str(_get_attr(record, "title", "Untitled"))).classes("text-sm font-bold")
-                        ui.label(str(_get_attr(record, "chain_step", ""))).classes("text-xs text-slate-400")
+                        title = str(_get_attr(record, "title", "Untitled"))
+                        step = str(_get_attr(record, "chain_step", ""))
+                        ui.label(title).classes("text-sm font-bold")
+                        ui.label(step).classes("text-xs text-slate-400")
                 with ui.card().classes("ytis-mini-card p-3 w-full"):
                     ui.label("System").classes("font-bold")
                     ui.label(f"Missions: {stats.get('missions', len(missions))} | Active: {stats.get('active', 0)}").classes("text-sm")
                     ui.label(f"Projects: {len(projects)} | Analyses: {len(records)}").classes("text-sm")
+                    with ui.row().classes("gap-1 mt-1"):
+                        ui.button("Analysis", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox")).props("outline dense")
+                        ui.button("Health", icon="monitor_heart", on_click=lambda: ui.navigate.to("/health")).props("outline dense")
 
 
 def _render_error_page(state: AppState, exc: Exception) -> None:
