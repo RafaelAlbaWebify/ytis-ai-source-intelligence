@@ -20,6 +20,7 @@ NAV_GROUPS = [
             ("Search", "/search", "search"),
             ("Viewer", "/viewer", "article"),
             ("Intelligence", "/intelligence", "hub"),
+            ("Knowledge Cards", "/knowledge", "category"),
             ("Analysis Library", "/analysis-library", "move_to_inbox"),
         ],
     ),
@@ -161,6 +162,7 @@ def register_pages(app_version: str = "") -> None:
     from ytis.ui.pages_analyze import render_analyze
     from ytis.ui.pages_analysis_inbox import render_analysis_inbox
     from ytis.ui.pages_missions import render_missions
+    from ytis.ui.pages_knowledge import render_knowledge
 
     try:
         from ytis.ui.pages_inspector import render_inspector
@@ -238,6 +240,10 @@ def register_pages(app_version: str = "") -> None:
         else:
             render_shell(state, "/intelligence")
             ui.label("Intelligence module not available").classes("ytis-page text-red-300")
+
+    @ui.page("/knowledge")
+    def knowledge_page() -> None:
+        render_knowledge(state)
 
     @ui.page("/analysis-library")
     def analysis_library_page() -> None:
