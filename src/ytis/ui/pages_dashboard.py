@@ -374,9 +374,17 @@ def _render_dashboard_body(state: AppState) -> None:
                     ui.button("Manager", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
             with ui.row().classes("w-full items-center gap-2 mt-1"):
                 if options:
-                    selector = ui.select(options=options, value=str(_get_attr(mission, "mission_id", "")), label="Current mission").classes("flex-1")
+                    current_id = str(_get_attr(mission, "mission_id", ""))
+                    current_label = next((label for label, mid in options.items() if mid == current_id), None)
+                    selector = ui.select(options=list(options.keys()), value=current_label, label="Current mission").classes("flex-1")
                     selector.props("dense")
-                    selector.on("update:model-value", lambda e: (_write_current_mission_id(project_root, str(e.args)), ui.navigate.to("/")))
+                    def _switch_current_mission(e) -> None:
+                        selected_label = str(e.args or "")
+                        selected_id = options.get(selected_label, "")
+                        if selected_id:
+                            _write_current_mission_id(project_root, selected_id)
+                            ui.navigate.to("/")
+                    selector.on("update:model-value", _switch_current_mission)
                 ui.button("Set Current", icon="push_pin", on_click=lambda: (_write_current_mission_id(project_root, str(_get_attr(mission, "mission_id", ""))), ui.notify("Current mission saved", type="positive"))).props("outline dense")
             _progress_badges(progress, next_step)
             if has_current_duplicates:
