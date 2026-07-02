@@ -1,28 +1,14 @@
 from __future__ import annotations
 
 import json
+import traceback
 from pathlib import Path
 from typing import Any
 
 from nicegui import ui
 
-from ytis.core.analysis_inbox import (
-    CHAIN_STEP_LABELS,
-    list_analyses,
-    mission_analysis_records,
-    mission_chain_progress,
-    save_analysis,
-)
-from ytis.core.missions import (
-    generate_prompt_chain,
-    list_missions,
-    mission_stats,
-    selected_project_records,
-)
-from ytis.core.project_hygiene import audit_projects
-from ytis.ui.components import open_path
 from ytis.ui.layout import render_shell
-from ytis.ui.state import AppState, val
+from ytis.ui.state import AppState
 
 
 CHAIN_ORDER = [
@@ -32,6 +18,14 @@ CHAIN_ORDER = [
     "STEP_04_apply_to_rafael_webify",
     "STEP_05_validation_plan",
 ]
+
+STEP_LABELS_FALLBACK = {
+    "STEP_01_extract_map": "Step 1 - Extract and map",
+    "STEP_02_compare_patterns": "Step 2 - Compare patterns",
+    "STEP_03_extract_workflows": "Step 3 - Extract workflows",
+    "STEP_04_apply_to_rafael_webify": "Step 4 - Apply to Rafael/Webify",
+    "STEP_05_validation_plan": "Step 5 - Validation plan",
+}
 
 STEP_TO_TOPIC = {
     "STEP_01_extract_map": "All topics",
@@ -47,7 +41,11 @@ def _project_root(state: AppState) -> Path:
 
 
 def _copy_to_clipboard(text: str) -> None:
-    ui.run_javascript(f"navigator.clipboard.writeText({json.dumps(text)})")
+    ui.run_javascript(f"navigator.clipboard.writeText({json.dumps(text or '')})")
+
+
+def _open_chatgpt() -> None:
+    ui.run_javascript("window.open('https://chatgpt.com', '_blank')")
 
 
 def _safe_int(value: Any) -> int:
@@ -66,19 +64,68 @@ def _compact(value: Any) -> str:
     return f"{n:,}"
 
 
-def _select_current_mission(project_root: Path, requested_id: str = ""):
-    missions = list_missions(project_root)
-    if requested_id:
-        for mission in missions:
-            if mission.mission_id == requested_id:
-                return mission
-    active = [m for m in missions if m.status == "active"]
+def _get_attr(obj: Any, name: str, default: Any = "") -> Any:
+    if isinstance(obj, dict):
+        return obj.get(name, default)
+    return getattr(obj, name, default)
+
+
+def _load_runtime(project_root: Path, state: AppState) -> dict[str, Any]:
+    data: dict[str, Any] = {
+        "errors": [],
+        "missions": [],
+        "records": [],
+        "projects": [],
+        "stats": {},
+        "step_labels": STEP_LABELS_FALLBACK,
+    }
+
+    try:
+        from ytis.core.missions import list_missions, mission_stats
+        data["missions"] = list_missions(project_root)
+        data["stats"] = mission_stats(data["missions"])
+    except Exception as exc:
+        data["errors"].append("Mission load failed: " + str(exc))
+
+    try:
+        from ytis.core.analysis_inbox import CHAIN_STEP_LABELS, list_analyses
+        data["step_labels"] = CHAIN_STEP_LABELS
+        data["records"] = list_analyses(project_root)
+    except Exception as exc:
+        data["errors"].append("Analysis load failed: " + str(exc))
+
+    try:
+        from ytis.core.project_hygiene import audit_projects
+        data["projects"] = audit_projects(state.load_projects())
+    except Exception as exc:
+        data["errors"].append("Project load failed: " + str(exc))
+
+    return data
+
+
+def _select_current_mission(missions: list[Any]) -> Any | None:
+    active = [m for m in missions if _get_attr(m, "status", "") == "active"]
     if active:
         return active[0]
-    visible = [m for m in missions if m.status != "archived"]
+    visible = [m for m in missions if _get_attr(m, "status", "") != "archived"]
     if visible:
         return visible[0]
     return missions[0] if missions else None
+
+
+def _progress_for_mission(project_root: Path, records: list[Any], mission: Any) -> dict[str, int]:
+    try:
+        from ytis.core.analysis_inbox import mission_chain_progress
+        return mission_chain_progress(records, _get_attr(mission, "mission_id", ""))
+    except Exception:
+        progress = {step: 0 for step in CHAIN_ORDER}
+        mission_id = _get_attr(mission, "mission_id", "")
+        for record in records:
+            if _get_attr(record, "mission_id", "") == mission_id:
+                step = _get_attr(record, "chain_step", "Unassigned")
+                progress[step] = progress.get(step, 0) + 1
+        progress["Total"] = sum(progress.get(step, 0) for step in CHAIN_ORDER)
+        return progress
 
 
 def _next_pending_step(progress: dict[str, int]) -> str:
@@ -88,24 +135,38 @@ def _next_pending_step(progress: dict[str, int]) -> str:
     return ""
 
 
-def _prompt_for_analysis_step(mission, projects: list[dict[str, Any]], analysis_step: str) -> str:
+def _selected_project_records(mission: Any, projects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    names = list(_get_attr(mission, "projects", []) or [])
+    lookup = {str(p.get("name", "Unnamed")): p for p in projects if isinstance(p, dict)}
+    return [lookup[name] for name in names if name in lookup]
+
+
+def _prompt_for_analysis_step(mission: Any, projects: list[dict[str, Any]], analysis_step: str) -> str:
     if not analysis_step:
         return ""
     try:
+        from ytis.core.missions import generate_prompt_chain
         chain = generate_prompt_chain(mission, projects)
         for step_id, (_, prompt) in zip(CHAIN_ORDER, chain):
             if step_id == analysis_step:
                 return prompt
         return chain[0][1] if chain else ""
     except Exception as exc:
-        return f"Could not generate prompt for {analysis_step}: {exc}"
+        return (
+            "# YTIS prompt generation fallback\n\n"
+            f"Mission: {_get_attr(mission, 'name', 'Untitled mission')}\n"
+            f"Step: {STEP_LABELS_FALLBACK.get(analysis_step, analysis_step)}\n\n"
+            "Could not generate the full mission prompt automatically.\n\n"
+            f"Error: {exc}\n\n"
+            "Go to Missions if you need the full prompt chain."
+        )
 
 
-def _duplicate_mission_names(missions) -> set[str]:
+def _duplicate_mission_names(missions: list[Any]) -> set[str]:
     seen: set[str] = set()
     duplicates: set[str] = set()
     for mission in missions:
-        key = (mission.name or "").strip().lower()
+        key = str(_get_attr(mission, "name", "")).strip().lower()
         if not key:
             continue
         if key in seen:
@@ -114,173 +175,183 @@ def _duplicate_mission_names(missions) -> set[str]:
     return duplicates
 
 
-def _mission_options(missions) -> dict[str, str]:
-    options: dict[str, str] = {}
-    for mission in missions:
-        label = f"{mission.name} [{mission.status}]"
-        options[label] = mission.mission_id
-    return options
+def _mission_records(records: list[Any], mission: Any) -> list[Any]:
+    mission_id = _get_attr(mission, "mission_id", "")
+    return [r for r in records if _get_attr(r, "mission_id", "") == mission_id]
 
 
-def _step_progress_row(progress: dict[str, int]) -> None:
+def _progress_badges(progress: dict[str, int], labels: dict[str, str]) -> None:
     with ui.row().classes("gap-1 flex-wrap"):
         for step in CHAIN_ORDER:
             done = progress.get(step, 0) > 0
-            short = CHAIN_STEP_LABELS.get(step, step).replace("Step ", "")
-            ui.badge(("OK " if done else "-- ") + short).props("color=green" if done else "color=grey")
+            label = labels.get(step, STEP_LABELS_FALLBACK.get(step, step)).replace("Step ", "")
+            ui.badge(("OK " if done else "-- ") + label).props("color=green" if done else "color=grey")
 
 
-def _open_chatgpt() -> None:
-    ui.run_javascript("window.open('https://chatgpt.com', '_blank')")
-
-
-def render_dashboard(state: AppState) -> None:
-    render_shell(state, "/")
-
+def _render_dashboard_body(state: AppState) -> None:
     project_root = _project_root(state)
-    projects = audit_projects(state.load_projects())
-    records = list_analyses(project_root)
-    missions = list_missions(project_root)
-    stats = mission_stats(missions)
+    runtime = _load_runtime(project_root, state)
 
-    requested_id = ""
-    try:
-        requested_id = str(ui.context.client.request.query_params.get("mission_id", ""))
-    except Exception:
-        requested_id = ""
+    missions = runtime["missions"]
+    records = runtime["records"]
+    projects = runtime["projects"]
+    labels = runtime["step_labels"]
+    stats = runtime["stats"]
 
-    mission = _select_current_mission(project_root, requested_id)
+    mission = _select_current_mission(missions)
 
     with ui.column().classes("ytis-page gap-3"):
         with ui.row().classes("w-full justify-between items-center"):
             with ui.column().classes("gap-0"):
                 ui.label("YTIS Dashboard").classes("text-3xl font-bold")
-                ui.label("Compact workflow: copy prompt, run ChatGPT, save answer, advance.").classes("text-sm text-slate-400")
+                ui.label("Compact workflow: copy prompt, run ChatGPT, paste answer, save and advance.").classes("text-sm text-slate-400")
             with ui.row().classes("gap-2"):
                 ui.button("Missions", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
                 ui.button("Build", icon="construction", on_click=lambda: ui.navigate.to("/build")).props("outline dense")
                 ui.button("Search", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline dense")
 
+        if runtime["errors"]:
+            with ui.expansion("Dashboard warnings", icon="warning", value=False).classes("ytis-card w-full text-white").props("dense"):
+                with ui.column().classes("p-3 gap-1"):
+                    for error in runtime["errors"]:
+                        ui.label(error).classes("text-sm text-orange-300")
+
         if not mission:
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("No mission available").classes("text-2xl font-bold")
-                ui.label("Create a mission first. Then this dashboard becomes the normal working screen.").classes("text-slate-400")
+                ui.label("Create a mission first. The dashboard will then show the compact workflow.").classes("text-slate-400")
                 ui.button("Create Mission", icon="flag", on_click=lambda: ui.navigate.to("/missions"), color="primary")
             return
 
-        progress = mission_chain_progress(records, mission.mission_id)
+        progress = _progress_for_mission(project_root, records, mission)
         next_step = _next_pending_step(progress)
-        next_label = CHAIN_STEP_LABELS.get(next_step, "All steps complete") if next_step else "All steps complete"
-        selected_projects = selected_project_records(mission, projects)
-        current_prompt = _prompt_for_analysis_step(mission, selected_projects, next_step)
-        linked_records = mission_analysis_records(records, mission.mission_id)
-
-        mission_select_options = _mission_options(missions)
-        selected_label = next((label for label, mid in mission_select_options.items() if mid == mission.mission_id), "")
+        next_label = labels.get(next_step, STEP_LABELS_FALLBACK.get(next_step, "All steps complete")) if next_step else "All steps complete"
+        selected_projects = _selected_project_records(mission, projects)
+        prompt = _prompt_for_analysis_step(mission, selected_projects, next_step)
+        linked = _mission_records(records, mission)
         duplicates = _duplicate_mission_names(missions)
 
         with ui.card().classes("ytis-card p-4 w-full"):
-            with ui.row().classes("w-full items-center justify-between gap-3"):
+            with ui.row().classes("w-full justify-between items-start gap-3"):
                 with ui.column().classes("gap-1 flex-1"):
                     ui.label("Current mission").classes("text-xs text-slate-400")
-                    ui.label(mission.name).classes("text-2xl font-bold")
+                    ui.label(str(_get_attr(mission, "name", "Untitled mission"))).classes("text-2xl font-bold")
                     ui.label("Next: " + next_label).classes("text-lg font-bold text-cyan-300")
-                with ui.column().classes("gap-1").style("min-width: 340px;"):
-                    mission_selector = ui.select(
-                        options=mission_select_options,
-                        value=mission.mission_id,
-                        label="Switch mission",
-                    ).classes("w-full")
-                    mission_selector.on("update:model-value", lambda e: ui.navigate.to(f"/?mission_id={e.args}"))
-            ui.label(mission.goal or "(no goal)").classes("text-sm text-slate-300")
-            _step_progress_row(progress)
+                    goal = str(_get_attr(mission, "goal", "") or "")
+                    if goal:
+                        ui.label(goal).classes("text-sm text-slate-300")
+                with ui.column().classes("gap-2"):
+                    ui.button("Mission Manager", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
+                    folder = _get_attr(mission, "folder", None)
+                    if folder:
+                        from ytis.ui.components import open_path
+                        ui.button("Open Folder", icon="folder_open", on_click=lambda p=folder: open_path(p)).props("outline dense")
+            _progress_badges(progress, labels)
             if duplicates:
-                ui.label("Warning: duplicate mission names: " + ", ".join(sorted(duplicates))).classes("text-xs text-orange-300")
+                ui.label("Duplicate mission names: " + ", ".join(sorted(duplicates))).classes("text-xs text-orange-300")
 
         with ui.grid(columns=2).classes("w-full gap-3"):
             with ui.card().classes("ytis-card p-4 w-full"):
                 ui.label("1. Prompt to send to ChatGPT").classes("text-xl font-bold")
                 ui.label(next_label).classes("text-sm text-cyan-300")
                 if next_step:
-                    prompt_box = ui.textarea(value=current_prompt).classes("w-full").props("rows=18")
+                    prompt_box = ui.textarea(value=prompt).classes("w-full").props("rows=16")
                     prompt_box.style("font-family: Consolas, monospace; font-size: 12px; line-height: 1.35;")
                     with ui.row().classes("gap-2"):
                         ui.button("Copy Prompt", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Prompt copied", type="positive")), color="primary")
                         ui.button("Open ChatGPT", icon="open_in_new", on_click=_open_chatgpt).props("outline")
                 else:
-                    ui.label("All prompt-chain steps have saved answers.").classes("text-green-300")
-                    ui.button("Open linked analyses", icon="link", on_click=lambda: ui.navigate.to("/analysis-inbox"), color="primary")
+                    ui.label("All mission steps have saved answers.").classes("text-green-300")
 
             with ui.card().classes("ytis-card p-4 w-full"):
                 ui.label("2. Paste ChatGPT answer").classes("text-xl font-bold")
                 if next_step:
-                    title_default = f"{mission.name} - {next_label}"
+                    title_default = f"{_get_attr(mission, 'name', 'Mission')} - {next_label}"
                     title_input = ui.input("Title", value=title_default).classes("w-full")
-                    answer_box = ui.textarea("Paste answer here").classes("w-full").props("rows=18")
+                    answer_box = ui.textarea("Paste answer here").classes("w-full").props("rows=16")
                     notes_box = ui.textarea("Notes optional").classes("w-full").props("rows=2")
-                    status_label = ui.label("Ready to save this answer to the current mission step.").classes("text-xs text-slate-400")
+                    status_label = ui.label("Ready.").classes("text-xs text-slate-400")
 
                     def do_save() -> None:
                         text = answer_box.value or ""
                         if not text.strip():
                             ui.notify("Paste the ChatGPT answer first", type="warning")
                             return
-                        record = save_analysis(
-                            project_root=project_root,
-                            title=title_input.value or title_default,
-                            analysis_text=text,
-                            projects=list(mission.projects),
-                            topic=STEP_TO_TOPIC.get(next_step, "All topics"),
-                            focus_preset=mission.focus_preset,
-                            source_bundle="",
-                            source_evidence_pack="",
-                            notes=notes_box.value or "",
-                            mission_id=mission.mission_id,
-                            mission_name=mission.name,
-                            chain_step=next_step,
-                        )
-                        status_label.text = f"Saved: {record.record_id}"
-                        status_label.classes(remove="text-slate-400")
-                        status_label.classes(add="text-green-400")
-                        status_label.update()
-                        ui.notify("Saved and linked. Dashboard will advance.", type="positive")
-                        ui.timer(0.7, lambda: ui.navigate.to(f"/?mission_id={mission.mission_id}"), once=True)
+                        try:
+                            from ytis.core.analysis_inbox import save_analysis
+                            record = save_analysis(
+                                project_root=project_root,
+                                title=title_input.value or title_default,
+                                analysis_text=text,
+                                projects=list(_get_attr(mission, "projects", []) or []),
+                                topic=STEP_TO_TOPIC.get(next_step, "All topics"),
+                                focus_preset=str(_get_attr(mission, "focus_preset", "Custom") or "Custom"),
+                                source_bundle="",
+                                source_evidence_pack="",
+                                notes=notes_box.value or "",
+                                mission_id=str(_get_attr(mission, "mission_id", "")),
+                                mission_name=str(_get_attr(mission, "name", "")),
+                                chain_step=next_step,
+                            )
+                            status_label.text = f"Saved: {_get_attr(record, 'record_id', 'analysis')}"
+                            status_label.classes(remove="text-slate-400")
+                            status_label.classes(add="text-green-400")
+                            status_label.update()
+                            ui.notify("Saved and linked. Dashboard will advance.", type="positive")
+                            ui.timer(0.7, lambda: ui.navigate.to("/"), once=True)
+                        except Exception as exc:
+                            ui.notify("Save failed: " + str(exc), type="negative")
+                            status_label.text = "Save failed: " + str(exc)
+                            status_label.classes(remove="text-slate-400")
+                            status_label.classes(add="text-red-300")
+                            status_label.update()
 
-                    with ui.row().classes("gap-2"):
-                        ui.button("Save and Advance", icon="save", on_click=do_save, color="primary")
-                        ui.button("Clear", icon="backspace", on_click=lambda: (setattr(answer_box, "value", ""), answer_box.update())).props("outline")
+                    ui.button("Save and Advance", icon="save", on_click=do_save, color="primary")
                 else:
                     ui.label("No pending step to save.").classes("text-green-300")
 
-        with ui.expansion("Details: sources, saved analyses, warnings", icon="tune", value=False).classes("ytis-card w-full text-white").props("dense expand-separator"):
+        with ui.expansion("Details", icon="tune", value=False).classes("ytis-card w-full text-white").props("dense"):
             with ui.grid(columns=3).classes("w-full gap-3 p-3"):
                 with ui.card().classes("ytis-mini-card p-3 w-full"):
                     ui.label("Sources").classes("font-bold")
                     if not selected_projects:
-                        ui.label("No attached project records.").classes("text-orange-300 text-sm")
+                        ui.label("No attached project records.").classes("text-sm text-orange-300")
                     for project in selected_projects:
-                        name = val(project, "name", "Unnamed")
-                        words = _compact(project.get("total_words"))
-                        transcripts = _compact(project.get("transcripts_created"))
-                        zip_path = project.get("zip_path")
-                        ready = bool(zip_path and Path(str(zip_path)).exists())
+                        name = project.get("name", "Unnamed") if isinstance(project, dict) else "Unnamed"
+                        words = _compact(project.get("total_words", 0)) if isinstance(project, dict) else "0"
+                        transcripts = _compact(project.get("transcripts_created", 0)) if isinstance(project, dict) else "0"
                         ui.label(f"{name}: {transcripts} transcripts, {words} words").classes("text-sm")
-                        if ready:
-                            ui.button("Open ZIP", icon="inventory_2", on_click=lambda p=zip_path: open_path(p)).props("outline dense")
-
                 with ui.card().classes("ytis-mini-card p-3 w-full"):
-                    ui.label("Saved for this mission").classes("font-bold")
-                    if not linked_records:
-                        ui.label("No saved answers yet.").classes("text-sm text-slate-400")
-                    for record in linked_records[:6]:
-                        step = CHAIN_STEP_LABELS.get(record.chain_step, record.chain_step)
-                        ui.label(record.title).classes("text-sm font-bold")
-                        ui.label(f"{step} | {record.word_count:,} words").classes("text-xs text-slate-400")
-
+                    ui.label("Saved answers").classes("font-bold")
+                    if not linked:
+                        ui.label("No saved answers for this mission.").classes("text-sm text-slate-400")
+                    for record in linked[:6]:
+                        ui.label(str(_get_attr(record, "title", "Untitled"))).classes("text-sm font-bold")
+                        ui.label(str(_get_attr(record, "chain_step", ""))).classes("text-xs text-slate-400")
                 with ui.card().classes("ytis-mini-card p-3 w-full"):
-                    ui.label("System summary").classes("font-bold")
-                    ui.label(f"Missions: {stats.get('missions', 0)} | Active: {stats.get('active', 0)} | Archived: {stats.get('archived', 0)}").classes("text-sm")
+                    ui.label("System").classes("font-bold")
+                    ui.label(f"Missions: {stats.get('missions', len(missions))} | Active: {stats.get('active', 0)}").classes("text-sm")
                     ui.label(f"Projects: {len(projects)} | Analyses: {len(records)}").classes("text-sm")
-                    with ui.row().classes("gap-2 mt-2"):
-                        ui.button("Analysis Library", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox")).props("outline dense")
-                        ui.button("Health", icon="monitor_heart", on_click=lambda: ui.navigate.to("/health")).props("outline dense")
+
+
+def _render_error_page(state: AppState, exc: Exception) -> None:
+    with ui.column().classes("ytis-page gap-3"):
+        ui.label("YTIS Dashboard safe mode").classes("text-3xl font-bold")
+        ui.label("Dashboard rendering failed, but the app is still usable. Use the links below while we inspect the error.").classes("text-orange-300")
+        with ui.row().classes("gap-2"):
+            ui.button("Missions", icon="flag", on_click=lambda: ui.navigate.to("/missions"), color="primary")
+            ui.button("Build", icon="construction", on_click=lambda: ui.navigate.to("/build")).props("outline")
+            ui.button("Search", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline")
+            ui.button("Health", icon="monitor_heart", on_click=lambda: ui.navigate.to("/health")).props("outline")
+        ui.label("Error").classes("text-xl font-bold")
+        ui.code(str(exc)).classes("w-full")
+        ui.label("Traceback").classes("text-xl font-bold")
+        ui.code(traceback.format_exc()).classes("w-full")
+
+
+def render_dashboard(state: AppState) -> None:
+    render_shell(state, "/")
+    try:
+        _render_dashboard_body(state)
+    except Exception as exc:
+        _render_error_page(state, exc)
