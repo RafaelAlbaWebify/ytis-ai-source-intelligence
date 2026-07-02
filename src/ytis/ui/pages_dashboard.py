@@ -11,10 +11,9 @@ from ytis.core.analysis_inbox import (
     save_analysis,
 )
 from ytis.core.missions import (
-    duplicate_mission_names,
+    generate_prompt_chain,
     list_missions,
     mission_stats,
-    prompt_for_analysis_step,
     selected_project_records,
 )
 from ytis.core.project_hygiene import audit_projects
@@ -69,6 +68,32 @@ def _next_pending_step(progress: dict[str, int]) -> str:
         if progress.get(step, 0) <= 0:
             return step
     return ""
+
+
+def __duplicate_mission_names(missions) -> set[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for mission in missions:
+        key = mission.name.strip().lower()
+        if key in seen:
+            duplicates.add(mission.name.strip())
+        seen.add(key)
+    return duplicates
+
+
+def __prompt_for_analysis_step(mission, projects: list[dict], analysis_step: str) -> str:
+    prompts = generate_prompt_chain(mission, selected_project_records(mission, projects))
+    index_map = {
+        "STEP_01_extract_map": 0,
+        "STEP_02_compare_patterns": 1,
+        "STEP_03_extract_workflows": 2,
+        "STEP_04_apply_to_rafael_webify": 3,
+        "STEP_05_validation_plan": 4,
+    }
+    idx = index_map.get(analysis_step, 0)
+    if prompts and idx < len(prompts):
+        return prompts[idx][1]
+    return prompts[0][1] if prompts else ""
 
 
 def _safe_int(value) -> int:
@@ -153,7 +178,7 @@ def render_dashboard(state: AppState) -> None:
         next_step = _next_pending_step(progress)
         next_label = CHAIN_STEP_LABELS.get(next_step, "All steps complete") if next_step else "All steps complete"
         selected_projects = selected_project_records(active_mission, projects)
-        current_prompt = prompt_for_analysis_step(active_mission, selected_projects, next_step) if next_step else ""
+        current_prompt = _prompt_for_analysis_step(active_mission, selected_projects, next_step) if next_step else ""
         linked_records = mission_analysis_records(records, active_mission.mission_id)
 
         with ui.card().classes("ytis-card p-5 w-full"):
@@ -296,7 +321,7 @@ def render_dashboard(state: AppState) -> None:
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Warnings / Cleanup").classes("text-xl font-bold")
                 warnings = []
-                duplicates = duplicate_mission_names(missions)
+                duplicates = _duplicate_mission_names(missions)
                 if duplicates:
                     warnings.append("Duplicate mission names: " + ", ".join(sorted(duplicates)))
                 if mission_stats_data.get("archived", 0):

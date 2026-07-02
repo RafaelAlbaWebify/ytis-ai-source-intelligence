@@ -28,5 +28,5 @@ Write-Host "Installing/updating dependencies..." -ForegroundColor Cyan
 
 $env:PYTHONPATH = Join-Path $ProjectRoot "src"
 
-Write-Host "Starting YTIS v0.1.3..." -ForegroundColor Green
+Write-Host "Starting YTIS..." -ForegroundColor Green
 & $VenvPython -m ytis.app
