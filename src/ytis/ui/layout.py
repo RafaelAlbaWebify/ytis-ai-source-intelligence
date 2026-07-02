@@ -11,7 +11,7 @@ NAV_GROUPS = [
             ("Dashboard", "/", "dashboard"),
             ("Build", "/build", "construction"),
             ("Missions", "/missions", "flag"),
-            ("Projects", "/projects", "folder"),
+            ("Library", "/library", "folder"),
         ],
     ),
     (
@@ -20,7 +20,7 @@ NAV_GROUPS = [
             ("Search", "/search", "search"),
             ("Viewer", "/viewer", "article"),
             ("Intelligence", "/intelligence", "hub"),
-            ("Analysis Inbox", "/analysis-inbox", "move_to_inbox"),
+            ("Analysis Library", "/analysis-library", "move_to_inbox"),
         ],
     ),
     (
@@ -36,11 +36,22 @@ NAV_GROUPS = [
 
 NAV_ITEMS = [item for _, items in NAV_GROUPS for item in items]
 
+ROUTE_ALIASES = {
+    "/projects": "/library",
+    "/analysis-inbox": "/analysis-library",
+}
+
+
+def _canonical_path(path: str) -> str:
+    return ROUTE_ALIASES.get(path, path)
+
 
 def _active_for(path: str, active_path: str) -> bool:
-    if path == "/":
-        return active_path == "/"
-    return active_path == path
+    active = _canonical_path(active_path)
+    target = _canonical_path(path)
+    if target == "/":
+        return active == "/"
+    return active == target
 
 
 def render_shell(state: AppState, active_path: str) -> None:
@@ -176,8 +187,12 @@ def register_pages(app_version: str = "") -> None:
     def build_page() -> None:
         render_build(state)
 
+    @ui.page("/library")
+    def library_page() -> None:
+        render_projects(state)
+
     @ui.page("/projects")
-    def projects_page() -> None:
+    def projects_legacy_page() -> None:
         render_projects(state)
 
     @ui.page("/search")
@@ -224,8 +239,12 @@ def register_pages(app_version: str = "") -> None:
             render_shell(state, "/intelligence")
             ui.label("Intelligence module not available").classes("ytis-page text-red-300")
 
+    @ui.page("/analysis-library")
+    def analysis_library_page() -> None:
+        render_analysis_inbox(state)
+
     @ui.page("/analysis-inbox")
-    def analysis_inbox_page() -> None:
+    def analysis_inbox_legacy_page() -> None:
         render_analysis_inbox(state)
 
     @ui.page("/missions")
