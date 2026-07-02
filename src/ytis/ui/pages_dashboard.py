@@ -70,7 +70,7 @@ def _next_pending_step(progress: dict[str, int]) -> str:
     return ""
 
 
-def __duplicate_mission_names(missions) -> set[str]:
+def _duplicate_mission_names(missions) -> set[str]:
     seen: set[str] = set()
     duplicates: set[str] = set()
     for mission in missions:
@@ -81,7 +81,7 @@ def __duplicate_mission_names(missions) -> set[str]:
     return duplicates
 
 
-def __prompt_for_analysis_step(mission, projects: list[dict], analysis_step: str) -> str:
+def _prompt_for_analysis_step(mission, projects: list[dict], analysis_step: str) -> str:
     prompts = generate_prompt_chain(mission, selected_project_records(mission, projects))
     index_map = {
         "STEP_01_extract_map": 0,
