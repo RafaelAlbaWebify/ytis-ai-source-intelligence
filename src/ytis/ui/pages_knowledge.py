@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import traceback
 
 from nicegui import ui
 
@@ -46,8 +47,7 @@ def _analysis_options(records) -> dict[str, str]:
     return options
 
 
-def render_knowledge(state: AppState) -> None:
-    render_shell(state, "/knowledge")
+def _render_knowledge_body(state: AppState) -> None:
     project_root = _project_root(state)
     downloads_dir = _downloads_dir(state)
 
@@ -83,7 +83,8 @@ def render_knowledge(state: AppState) -> None:
                     status_select = ui.select(CARD_STATUS, value="Draft", label="Status").classes("w-full")
                     tags_input = ui.input("Tags", value="Webify, offer, validation").classes("w-full")
                 source_options = _analysis_options(analyses)
-                source_select = ui.select(options=source_options, value="", label="Source analysis").classes("w-full")
+                source_labels = list(source_options.keys())
+                source_select = ui.select(options=source_labels, value="No source analysis", label="Source analysis").classes("w-full")
                 content_box = ui.textarea(
                     "Card content",
                     value=(
@@ -97,7 +98,8 @@ def render_knowledge(state: AppState) -> None:
                 status_label = ui.label("Ready").classes("text-xs text-slate-400")
 
                 def selected_analysis():
-                    selected_id = source_select.value or ""
+                    selected_label = source_select.value or "No source analysis"
+                    selected_id = source_options.get(selected_label, "")
                     for record in analyses:
                         if record.record_id == selected_id:
                             return record
@@ -253,3 +255,26 @@ def render_knowledge(state: AppState) -> None:
             status_filter.on("update:model-value", lambda e: refresh_table())
             text_filter.on("update:model-value", lambda e: refresh_table())
             refresh_table()
+
+
+
+def _render_knowledge_error(exc: Exception) -> None:
+    with ui.column().classes("ytis-page gap-3"):
+        ui.label("Knowledge Cards safe mode").classes("text-3xl font-bold")
+        ui.label("The Knowledge Cards page failed to render, but YTIS is still usable.").classes("text-orange-300")
+        with ui.row().classes("gap-2"):
+            ui.button("Dashboard", icon="dashboard", on_click=lambda: ui.navigate.to("/"), color="primary")
+            ui.button("Analysis Library", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-library")).props("outline")
+            ui.button("Library", icon="folder", on_click=lambda: ui.navigate.to("/library")).props("outline")
+        ui.label("Error").classes("text-xl font-bold")
+        ui.code(str(exc)).classes("w-full")
+        ui.label("Traceback").classes("text-xl font-bold")
+        ui.code(traceback.format_exc()).classes("w-full")
+
+
+def render_knowledge(state: AppState) -> None:
+    render_shell(state, "/knowledge")
+    try:
+        _render_knowledge_body(state)
+    except Exception as exc:
+        _render_knowledge_error(exc)
