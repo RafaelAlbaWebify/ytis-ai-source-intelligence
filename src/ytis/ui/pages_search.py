@@ -4,6 +4,7 @@ from nicegui import ui
 
 from ytis.core.transcript_search import SearchResult, export_results, search_transcripts
 from ytis.ui.components import open_path
+from ytis.ui.context import current_mission_data, preferred_project_name
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, val
 
@@ -12,7 +13,10 @@ def render_search(state: AppState) -> None:
     render_shell(state, "/search")
 
     projects = state.load_projects()
-    project_names = ["All projects"] + [val(p, "name", "Unnamed") for p in projects]
+    real_project_names = [val(p, "name", "Unnamed") for p in projects]
+    project_names = ["All projects"] + real_project_names
+    default_scope = preferred_project_name(state, real_project_names)
+    mission_data = current_mission_data(state)
     last_results: list[SearchResult] = []
     last_query: dict[str, str] = {"value": ""}
 
@@ -21,18 +25,18 @@ def render_search(state: AppState) -> None:
         ui.navigate.to("/viewer")
 
     with ui.column().classes("ytis-page gap-4"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Search Transcripts").classes("text-3xl font-bold")
                 ui.label("Search across clean TXT transcript files with snippets and exportable results").classes("text-sm text-slate-300")
             ui.button("Open Viewer", icon="article", on_click=lambda: ui.navigate.to("/viewer"), color="primary")
 
-        with ui.grid(columns=3).classes("w-full gap-4"):
-            with ui.card().classes("ytis-card p-5 w-full").style("grid-column: span 2;"):
+        with ui.grid().classes("ytis-grid-3"):
+            with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Search Controls").classes("text-xl font-bold")
-                with ui.row().classes("w-full gap-3"):
-                    selected_project = ui.select(project_names, value=project_names[0] if project_names else "All projects", label="Scope").classes("flex-1")
-                    max_results = ui.select([25, 50, 100, 200], value=100, label="Limit").classes("w-40")
+                with ui.row().classes("w-full gap-3 ytis-card-row"):
+                    selected_project = ui.select(project_names, value=default_scope if default_scope in real_project_names else "All projects", label="Scope").classes("flex-1 min-w-[220px]")
+                    max_results = ui.select([25, 50, 100, 200], value=100, label="Limit").classes("w-40 min-w-[130px]")
                 query = ui.input("Search text").classes("w-full")
                 ui.label("Search is case-insensitive and scans local clean_txt files. It does not call YouTube.").classes("text-xs text-slate-400")
                 with ui.row().classes("gap-2 mt-2"):
@@ -41,11 +45,21 @@ def render_search(state: AppState) -> None:
                     export_button.disable()
 
             with ui.card().classes("ytis-card p-5 w-full"):
-                ui.label("Useful Searches").classes("text-xl font-bold")
-                suggestions = ["pricing", "offer", "funnel", "agency", "cold email", "onboarding", "sales call", "niche"]
-                with ui.row().classes("gap-2"):
+                ui.label("Mission Search Suggestions").classes("text-xl font-bold")
+                topics = ", ".join(mission_data.get("topics") or [])
+                focus = str(mission_data.get("focus_preset") or "")
+                if "Webify" in focus or "Lead generation" in topics or "Offer" in topics:
+                    suggestions = ["lead", "enquiry", "contact form", "follow up", "pricing", "audit", "local business", "client", "validation", "workflow"]
+                else:
+                    suggestions = ["pricing", "offer", "funnel", "agency", "cold email", "onboarding", "sales call", "niche"]
+
+                def apply_suggestion(term: str) -> None:
+                    query.value = term
+                    query.update()
+
+                with ui.row().classes("gap-2 flex-wrap"):
                     for term in suggestions:
-                        ui.button(term, on_click=lambda t=term: setattr(query, "value", t)).props("outline dense")
+                        ui.button(term, on_click=lambda t=term: apply_suggestion(t)).props("outline dense")
                 ui.separator().classes("bg-slate-700 my-3")
                 ui.label("Tip").classes("font-bold")
                 ui.label("Use exact business terms first. Broad terms may return too much context.").classes("text-sm text-slate-400")
@@ -71,8 +85,8 @@ def render_search(state: AppState) -> None:
 
                 for result in results:
                     with ui.card().classes("ytis-mini-card p-4 w-full"):
-                        with ui.row().classes("w-full justify-between items-start gap-4"):
-                            with ui.column().classes("gap-1 flex-1"):
+                        with ui.row().classes("w-full justify-between items-start gap-4 ytis-card-row"):
+                            with ui.column().classes("gap-1 flex-1 min-w-0"):
                                 ui.label(result.file_name).classes("font-bold")
                                 ui.label(f"{result.project} | video id: {result.video_id or '-'} | matches: {result.match_count}").classes("text-xs text-blue-300")
                                 ui.label(result.snippet).classes("text-sm text-slate-300")

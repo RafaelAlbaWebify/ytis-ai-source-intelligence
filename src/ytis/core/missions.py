@@ -350,10 +350,10 @@ Focus: {mission.focus_preset}
 How to use:
 1. Upload the mission bundle or selected research packs to ChatGPT.
 2. Run STEP_01 first.
-3. Save the ChatGPT answer into YTIS Analysis Inbox.
+3. Save the ChatGPT answer into YTIS Analysis Library.
 4. Run STEP_02 in the same chat or with the previous answer pasted.
 5. Continue until the final validation/action step.
-6. Save important answers back into YTIS Analysis Inbox.
+6. Save important answers back into YTIS Analysis Library.
 
 Files:
 {chr(10).join(f"- {path.name}" for path in step_paths)}
@@ -425,7 +425,7 @@ Goal:
 How to use:
 1. Upload this mission bundle ZIP to ChatGPT.
 2. Open MISSION_PROMPT.md for one-pass analysis, or use prompt_chain/ for staged analysis.
-3. Save the ChatGPT result back into YTIS Analysis Inbox.
+3. Save the ChatGPT result back into YTIS Analysis Library.
 
 Included research packs:
 {chr(10).join(f"- {p.name}" for p in included) or "- None"}

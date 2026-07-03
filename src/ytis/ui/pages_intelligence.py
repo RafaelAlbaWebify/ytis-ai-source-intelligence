@@ -20,6 +20,7 @@ from ytis.core.library_intelligence import (
 )
 from ytis.core.project_hygiene import audit_projects
 from ytis.ui.components import open_path
+from ytis.ui.context import preferred_project_name
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, short_path, val
 
@@ -45,6 +46,7 @@ def render_intelligence(state: AppState) -> None:
     topic_rows, topic_evidence = scan_topic_matrix(projects)
     insights = quick_insights(projects, topic_rows)
     project_names = [val(p, "name", "Unnamed") for p in projects]
+    default_project = preferred_project_name(state, project_names)
     project_checks: dict[str, object] = {}
 
     def selected_projects() -> list[dict]:
@@ -57,28 +59,28 @@ def render_intelligence(state: AppState) -> None:
         ui.navigate.to("/viewer")
 
     with ui.column().classes("ytis-page gap-4"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Multi-Project Intelligence").classes("text-3xl font-bold")
                 ui.label("Scope, scan, drill down, export evidence, and create analysis bundles").classes("text-sm text-slate-300")
-            with ui.row().classes("gap-2"):
+            with ui.row().classes("gap-2 flex-wrap justify-end"):
                 ui.button("Search Library", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline")
                 ui.button("Build New Pack", icon="add", on_click=lambda: ui.navigate.to("/build"), color="primary")
 
-        with ui.grid(columns=5).classes("w-full gap-3"):
+        with ui.grid().classes("ytis-grid-5"):
             _metric("Projects", compact(stats.projects), "library")
             _metric("Videos", compact(stats.videos), "indexed")
             _metric("Transcripts", compact(stats.transcripts), "clean TXT")
             _metric("Words", compact(stats.words), "analysis volume")
             _metric("ZIP-ready", compact(stats.zip_ready), "upload packs")
 
-        with ui.grid(columns=3).classes("w-full gap-4"):
+        with ui.grid().classes("ytis-grid-3"):
             with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Analysis Scope").classes("text-xl font-bold")
-                ui.label("Choose projects and analysis focus for prompt/bundle.").classes("text-sm text-slate-400")
+                ui.label("Choose projects and analysis focus for prompt/bundle. Defaults to the current mission project when available.").classes("text-sm text-slate-400")
                 for p in ranked:
                     name = val(p, "name", "Unnamed")
-                    project_checks[name] = ui.checkbox(name, value=True).classes("text-sm")
+                    project_checks[name] = ui.checkbox(name, value=(name == default_project) if default_project else True).classes("text-sm")
                 preset_select = ui.select(list(FOCUS_PRESETS.keys()), value="Business lessons", label="Focus preset").classes("w-full")
                 selected_status = ui.label("").classes("text-xs text-blue-300")
 
@@ -122,9 +124,9 @@ def render_intelligence(state: AppState) -> None:
 
         with _section("Library Topic Matrix", "grid_on", opened=False):
             with ui.column().classes("p-4 gap-3"):
-                with ui.row().classes("w-full justify-between items-center"):
+                with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
                     ui.label("Local keyword scan across all clean transcripts. Use it as a navigation map, not final analysis.").classes("text-sm text-slate-400")
-                    with ui.row().classes("gap-2"):
+                    with ui.row().classes("gap-2 flex-wrap"):
                         export_matrix_btn = ui.button("Export Matrix CSV", icon="download").props("outline dense")
                         export_evidence_btn = ui.button("Export Evidence CSV", icon="download").props("outline dense")
 
@@ -150,10 +152,10 @@ def render_intelligence(state: AppState) -> None:
 
         with _section("Topic Drilldown / Evidence", "manage_search", opened=True):
             with ui.column().classes("p-4 gap-3"):
-                with ui.row().classes("w-full gap-3"):
-                    topic_select = ui.select(["All topics"] + list(TOPIC_KEYWORDS.keys()), value="All topics", label="Topic").classes("flex-1")
-                    project_select = ui.select(["All projects"] + project_names, value="All projects", label="Project").classes("flex-1")
-                    limit_select = ui.select([10, 25, 50, 100], value=25, label="Limit").classes("w-32")
+                with ui.row().classes("w-full gap-3 ytis-card-row"):
+                    topic_select = ui.select(["All topics"] + list(TOPIC_KEYWORDS.keys()), value="All topics", label="Topic").classes("flex-1 min-w-[180px]")
+                    project_select = ui.select(["All projects"] + project_names, value=default_project if default_project in project_names else "All projects", label="Project").classes("flex-1 min-w-[180px]")
+                    limit_select = ui.select([10, 25, 50, 100], value=25, label="Limit").classes("w-32 min-w-[120px]")
                 drilldown_status = ui.label("").classes("text-xs text-slate-400")
                 drilldown_results = ui.column().classes("w-full gap-2")
 
@@ -172,8 +174,8 @@ def render_intelligence(state: AppState) -> None:
                             return
                         for hit in filtered:
                             with ui.card().classes("ytis-mini-card p-3 w-full"):
-                                with ui.row().classes("w-full justify-between items-start gap-3"):
-                                    with ui.column().classes("gap-1 flex-1"):
+                                with ui.row().classes("w-full justify-between items-start gap-3 ytis-card-row"):
+                                    with ui.column().classes("gap-1 flex-1 min-w-0"):
                                         ui.label(f"{hit.topic} | {hit.project} | {hit.matches} matches").classes("font-bold")
                                         ui.label(hit.file_name).classes("text-xs text-blue-300")
                                         ui.label(hit.snippet).classes("text-sm text-slate-300")
@@ -188,13 +190,13 @@ def render_intelligence(state: AppState) -> None:
 
         with _section("Cross-Project Prompt Generator", "psychology", opened=False):
             with ui.column().classes("p-4 gap-3"):
-                with ui.row().classes("w-full justify-between items-center"):
+                with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
                     ui.label("Prompt is generated from selected scope and focus preset.").classes("text-sm text-slate-400")
                     prompt_status = ui.label("Ready").classes("text-xs text-green-400")
 
                 focus = ui.textarea("Analysis focus", value=FOCUS_PRESETS["Business lessons"]).classes("w-full").props("rows=3")
 
-                with ui.row().classes("gap-2"):
+                with ui.row().classes("gap-2 flex-wrap"):
                     generate_btn = ui.button("Generate Scoped Prompt", icon="hub", color="primary")
                     copy_btn = ui.button("Copy Prompt", icon="content_copy").props("outline")
                     save_btn = ui.button("Save MD", icon="save").props("outline")
@@ -222,7 +224,7 @@ def render_intelligence(state: AppState) -> None:
                             ("Words", compact(scoped.words)),
                             ("ZIP-ready", scoped.zip_ready),
                         ]:
-                            with ui.row().classes("w-full justify-between border-b border-slate-800 py-1"):
+                            with ui.row().classes("w-full justify-between border-b border-slate-800 py-1 ytis-card-row"):
                                 ui.label(key).classes("text-sm text-slate-400")
                                 ui.label(str(value)).classes("text-sm font-bold")
 

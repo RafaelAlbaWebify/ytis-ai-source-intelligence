@@ -6,6 +6,7 @@ from nicegui import ui
 
 from ytis.core.transcript_viewer import list_transcripts, read_transcript, search_inside_text
 from ytis.ui.components import open_path
+from ytis.ui.context import preferred_project_name
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, val
 
@@ -42,12 +43,11 @@ def render_viewer(state: AppState) -> None:
     project_names = [val(p, "name", "Unnamed") for p in projects]
     requested_file = getattr(state, "viewer_file_path", None)
 
-    latest = state.current_project or state.load_latest_project()
     requested_project = _project_for_file(projects, requested_file)
-    default_project = requested_project or val(latest, "name", project_names[0] if project_names else "")
+    default_project = requested_project or preferred_project_name(state, project_names)
 
     with ui.column().classes("ytis-page gap-4"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Transcript Viewer").classes("text-3xl font-bold")
                 ui.label("Read and search transcript TXT files inside YTIS").classes("text-sm text-slate-300")
@@ -87,7 +87,7 @@ def render_viewer(state: AppState) -> None:
                         ui.label(str(exc)).classes("text-red-400")
                     return
 
-                with ui.grid(columns=4).classes("w-full gap-3"):
+                with ui.grid().classes("ytis-grid-4"):
                     with ui.card().classes("ytis-metric p-4"):
                         ui.label("Words").classes("text-sm text-slate-400")
                         ui.label(f"{info.word_count:,}").classes("text-2xl font-bold")
@@ -102,8 +102,8 @@ def render_viewer(state: AppState) -> None:
                         ui.label(f"{info.size_kb} KB").classes("text-2xl font-bold")
 
                 with ui.card().classes("ytis-card p-5 w-full"):
-                    with ui.row().classes("w-full justify-between items-start gap-4"):
-                        with ui.column().classes("gap-1 flex-1"):
+                    with ui.row().classes("w-full justify-between items-start gap-4 ytis-card-row"):
+                        with ui.column().classes("gap-1 flex-1 min-w-0"):
                             ui.label(info.file_name).classes("text-xl font-bold")
                             ui.label(f"Video ID: {info.video_id or '-'}").classes("text-sm text-blue-300")
                             ui.label(str(info.path)).classes("text-xs text-slate-500 break-all")

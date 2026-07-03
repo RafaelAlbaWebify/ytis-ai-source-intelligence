@@ -4,6 +4,7 @@ from nicegui import ui
 
 from ytis.core.transcript_repair import ProjectRepairReport, analyze_project, repair_project
 from ytis.ui.components import open_path
+from ytis.ui.context import preferred_project_name
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, val
 
@@ -17,11 +18,10 @@ def render_repair(state: AppState) -> None:
 
     projects = state.load_projects()
     project_names = [val(p, "name", "Unnamed") for p in projects]
-    latest = state.current_project or state.load_latest_project()
-    default_project = val(latest, "name", project_names[0] if project_names else "")
+    default_project = preferred_project_name(state, project_names)
 
     with ui.column().classes("ytis-page gap-4"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Transcript Repair").classes("text-3xl font-bold")
                 ui.label("Detect and repair repeated adjacent transcript text in clean_txt files").classes("text-sm text-slate-300")
@@ -49,7 +49,7 @@ def render_repair(state: AppState) -> None:
         def render_report(report: ProjectRepairReport, repaired: bool = False) -> None:
             output.clear()
             with output:
-                with ui.grid(columns=4).classes("w-full gap-3"):
+                with ui.grid().classes("ytis-grid-4"):
                     with ui.card().classes("ytis-metric p-4"):
                         ui.label("Files checked").classes("text-sm text-slate-400")
                         ui.label(str(report.files_checked)).classes("text-2xl font-bold")

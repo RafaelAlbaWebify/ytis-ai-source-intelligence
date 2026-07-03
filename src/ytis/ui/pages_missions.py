@@ -35,7 +35,7 @@ from ytis.ui.state import AppState, val
 
 
 def _project_root(state: AppState) -> Path:
-    return Path(getattr(state, "project_root", "") or Path.cwd())
+    return Path(getattr(state, "project_root_path", None) or getattr(state, "project_root", "") or Path.cwd())
 
 
 def _downloads_dir(state: AppState) -> Path:
@@ -71,7 +71,7 @@ def _next_pending_step(progress: dict[str, int]) -> str:
 
 def _prompt_for_step(mission, projects: list[dict], step_key: str) -> str:
     prompts = generate_prompt_chain(mission, selected_project_records(mission, projects))
-    # Keys from Analysis Inbox: STEP_01_extract_map, STEP_02_compare_patterns, etc.
+    # Keys from Analysis Library: STEP_01_extract_map, STEP_02_compare_patterns, etc.
     index_map = {
         "STEP_01_extract_map": 0,
         "STEP_02_compare_patterns": 1,
@@ -121,16 +121,16 @@ def render_missions(state: AppState) -> None:
     initial_stats = mission_stats(initial_missions)
 
     with ui.column().classes("ytis-page gap-4"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Study Missions").classes("text-3xl font-bold")
                 ui.label("Run the next pending step, manage missions, and track linked ChatGPT analyses").classes("text-sm text-slate-300")
-            with ui.row().classes("gap-2"):
+            with ui.row().classes("gap-2 flex-wrap justify-end"):
                 ui.button("Intelligence", icon="hub", on_click=lambda: ui.navigate.to("/intelligence")).props("outline")
-                ui.button("Analysis Inbox", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox")).props("outline")
+                ui.button("Analysis Library", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-library")).props("outline")
                 ui.button("Open Missions Folder", icon="folder_open", on_click=lambda: open_path(project_root / "missions"), color="primary")
 
-        with ui.grid(columns=5).classes("w-full gap-3"):
+        with ui.grid().classes("ytis-grid-5"):
             missions_metric = _metric("Missions", str(initial_stats.get("missions", 0)), "total")
             active_metric = _metric("Active", str(initial_stats.get("active", 0)), "in progress")
             paused_metric = _metric("Paused", str(initial_stats.get("paused", 0)), "waiting")
@@ -151,11 +151,11 @@ def render_missions(state: AppState) -> None:
 
         with ui.expansion("Create New Mission", icon="add_task", value=False).classes("ytis-card w-full text-white").props("expand-separator dense"):
             with ui.column().classes("p-4 gap-3"):
-                with ui.grid(columns=2).classes("w-full gap-3"):
+                with ui.grid().classes("ytis-grid-2"):
                     name_input = ui.input("Mission name", value="Webify service ideas").classes("w-full")
                     focus_select = ui.select(MISSION_FOCUS_OPTIONS, value="Webify service ideas", label="Focus preset").classes("w-full")
                 goal_input = ui.textarea("Mission goal", value=MISSION_TEMPLATES["Webify service ideas"]).classes("w-full").props("rows=4")
-                with ui.grid(columns=2).classes("w-full gap-3"):
+                with ui.grid().classes("ytis-grid-2"):
                     project_select = ui.select(project_names, value=project_names, multiple=True, label="Source projects").classes("w-full")
                     topic_select = ui.select(MISSION_TOPIC_OPTIONS, value=["Offer", "Pricing", "Lead generation", "Workflow"], multiple=True, label="Topics").classes("w-full")
                 status_label = ui.label("Ready").classes("text-xs text-slate-400")
@@ -205,10 +205,10 @@ def render_missions(state: AppState) -> None:
                 create_btn.on("click", do_create)
 
         with ui.card().classes("ytis-card p-5 w-full"):
-            with ui.row().classes("w-full justify-between items-center"):
+            with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
                 with ui.column().classes("gap-0"):
                     ui.label("Mission Library").classes("text-xl font-bold")
-                    ui.label("Normal workflow: Copy Next Step, paste in ChatGPT, save answer in Analysis Inbox.").classes("text-sm text-slate-400")
+                    ui.label("Normal workflow: copy the next step, paste in ChatGPT, save the answer in Analysis Library.").classes("text-sm text-slate-400")
                 hide_archived = ui.checkbox("Hide archived", value=True).classes("text-sm")
             duplicate_warning = ui.label("").classes("text-xs text-orange-300")
             missions_container = ui.column().classes("w-full gap-2")
@@ -267,7 +267,7 @@ def render_missions(state: AppState) -> None:
                     with ui.row().classes("justify-end w-full"):
                         ui.button("Close", on_click=dialog.close).props("outline")
                         ui.button("Copy Next Step", icon="content_copy", on_click=lambda: (_copy_to_clipboard(prompt_box.value or ""), ui.notify("Next step copied", type="positive")), color="primary")
-                        ui.button("Go to Analysis Inbox", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox")).props("outline")
+                        ui.button("Go to Analysis Library", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-library")).props("outline")
                 dialog.open()
 
             def show_linked_analyses(mission) -> None:
@@ -276,7 +276,7 @@ def render_missions(state: AppState) -> None:
                     ui.label("Linked Mission Analyses").classes("text-xl font-bold")
                     ui.label(mission.name).classes("text-sm text-slate-400")
                     if not records:
-                        ui.label("No analyses linked to this mission yet. Save one from Analysis Inbox.").classes("text-slate-400")
+                        ui.label("No analyses linked to this mission yet. Save one from Analysis Library.").classes("text-slate-400")
                     else:
                         for record in records:
                             with ui.card().classes("ytis-mini-card p-3 w-full"):
@@ -288,7 +288,7 @@ def render_missions(state: AppState) -> None:
                                     ui.button("Open Folder", icon="folder", on_click=lambda p=record.folder: open_path(p)).props("outline dense")
                     with ui.row().classes("justify-end w-full"):
                         ui.button("Close", on_click=dialog.close).props("outline")
-                        ui.button("Analysis Inbox", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox"), color="primary")
+                        ui.button("Analysis Library", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-library"), color="primary")
                 dialog.open()
 
             def show_edit_mission(mission) -> None:
@@ -391,8 +391,8 @@ def render_missions(state: AppState) -> None:
                         next_step = _next_pending_step(progress)
                         next_label = CHAIN_STEP_LABELS.get(next_step, "All steps complete") if next_step else "All steps complete"
                         with ui.card().classes("ytis-mini-card p-4 w-full"):
-                            with ui.row().classes("w-full justify-between items-start gap-3"):
-                                with ui.column().classes("gap-2 flex-1"):
+                            with ui.row().classes("w-full justify-between items-start gap-3 ytis-card-row"):
+                                with ui.column().classes("gap-2 flex-1 min-w-0"):
                                     ui.label(mission.name).classes("font-bold text-lg")
                                     ui.label(f"{mission.status.upper()} | {mission.focus_preset} | {mission.created_at}").classes("text-xs text-slate-400")
                                     ui.label("Projects: " + (", ".join(mission.projects) if mission.projects else "-")).classes("text-xs text-blue-300")
@@ -401,7 +401,7 @@ def render_missions(state: AppState) -> None:
                                     ui.label(f"Linked analyses: {progress.get('Total', 0)} | Selected project records available: {len(selected_projects)}").classes("text-xs text-slate-500")
                                     ui.label("Next: " + next_label).classes("text-sm font-bold text-cyan-300")
                                     render_progress(progress)
-                                with ui.column().classes("gap-2"):
+                                with ui.column().classes("gap-2 min-w-[180px]"):
                                     if next_step:
                                         ui.button("Copy Next Step", icon="content_copy", on_click=lambda m=mission, s=next_step: (_copy_to_clipboard(_prompt_for_step(m, projects, s)), ui.notify("Next pending step copied", type="positive")), color="primary").props("dense")
                                         ui.button("View Next Step", icon="visibility", on_click=lambda m=mission, s=next_step: show_next_step(m, s)).props("outline dense")

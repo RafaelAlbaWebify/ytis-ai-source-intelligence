@@ -7,3 +7,10 @@ logs/
 *.zip
 .DS_Store
 Thumbs.db
+analysis_results/
+knowledge_cards/
+missions/
+missions_deleted/
+ytis_state/
+webify_validation_kit_v1/
+patch_backup_*/

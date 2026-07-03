@@ -20,6 +20,7 @@ from ytis.core.analysis_inbox import (
 from ytis.core.missions import list_missions
 from ytis.core.project_hygiene import audit_projects
 from ytis.ui.components import open_path
+from ytis.ui.context import preferred_project_name
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, val
 
@@ -33,7 +34,7 @@ def _metric(title: str, value: str, caption: str = "") -> None:
 
 
 def _project_root(state: AppState) -> Path:
-    return Path(getattr(state, "project_root", "") or Path.cwd())
+    return Path(getattr(state, "project_root_path", None) or getattr(state, "project_root", "") or Path.cwd())
 
 
 def _downloads_dir(state: AppState) -> Path:
@@ -49,7 +50,7 @@ def _copy_to_clipboard(text: str) -> None:
 
 
 def render_analysis_inbox(state: AppState) -> None:
-    render_shell(state, "/analysis-inbox")
+    render_shell(state, "/analysis-library")
 
     project_root = _project_root(state)
     downloads_dir = _downloads_dir(state)
@@ -66,14 +67,14 @@ def render_analysis_inbox(state: AppState) -> None:
     with ui.column().classes("ytis-page gap-4"):
         with ui.row().classes("w-full justify-between items-center"):
             with ui.column().classes("gap-0"):
-                ui.label("Analysis Inbox").classes("text-3xl font-bold")
+                ui.label("Analysis Library").classes("text-3xl font-bold")
                 ui.label("Save, browse, export, and continue ChatGPT results inside YTIS").classes("text-sm text-slate-300")
-            with ui.row().classes("gap-2"):
+            with ui.row().classes("gap-2 flex-wrap justify-end"):
                 ui.button("Missions", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline")
                 ui.button("Intelligence", icon="hub", on_click=lambda: ui.navigate.to("/intelligence")).props("outline")
                 ui.button("Open Results Folder", icon="folder_open", on_click=lambda: open_path(project_root / "analysis_results"), color="primary")
 
-        with ui.grid(columns=5).classes("w-full gap-3"):
+        with ui.grid().classes("ytis-grid-5"):
             _metric("Saved analyses", str(stats["records"]), "ChatGPT results")
             _metric("Missions", str(stats["missions"]), "linked")
             _metric("Projects", str(stats["projects"]), "covered")
@@ -84,16 +85,18 @@ def render_analysis_inbox(state: AppState) -> None:
             with ui.column().classes("p-4 gap-3"):
                 ui.label("After ChatGPT analyzes a mission bundle or prompt-chain step, paste the answer here and link it to the mission/step.").classes("text-sm text-slate-400")
 
-                with ui.grid(columns=2).classes("w-full gap-3"):
+                with ui.grid().classes("ytis-grid-2"):
                     title_input = ui.input("Analysis title", value="").classes("w-full")
                     focus_select = ui.select(FOCUS_OPTIONS, value="Business lessons", label="Focus preset").classes("w-full")
-                with ui.grid(columns=2).classes("w-full gap-3"):
+                with ui.grid().classes("ytis-grid-2"):
                     topic_select = ui.select(TOPIC_OPTIONS, value="All topics", label="Topic").classes("w-full")
-                    project_select = ui.select(project_names, value=project_names[:1] if project_names else [], multiple=True, label="Related projects").classes("w-full")
-                with ui.grid(columns=2).classes("w-full gap-3"):
+                    default_project = preferred_project_name(state, project_names)
+                    default_projects = [default_project] if default_project in project_names else (project_names[:1] if project_names else [])
+                    project_select = ui.select(project_names, value=default_projects, multiple=True, label="Related projects").classes("w-full")
+                with ui.grid().classes("ytis-grid-2"):
                     mission_select = ui.select(list(mission_options.keys()), value="No mission", label="Related mission").classes("w-full")
                     chain_step_select = ui.select(CHAIN_STEP_OPTIONS, value="Unassigned", label="Prompt-chain step").classes("w-full")
-                with ui.grid(columns=2).classes("w-full gap-3"):
+                with ui.grid().classes("ytis-grid-2"):
                     source_bundle = ui.input("Source bundle filename/path", value="").classes("w-full")
                     source_evidence = ui.input("Source evidence pack filename/path", value="").classes("w-full")
 
@@ -177,12 +180,13 @@ def render_analysis_inbox(state: AppState) -> None:
 
         with ui.card().classes("ytis-card p-5 w-full"):
             ui.label("Saved Analysis Library").classes("text-xl font-bold")
-            with ui.row().classes("w-full gap-3"):
-                filter_project = ui.select(["All projects"] + project_names, value="All projects", label="Project").classes("flex-1")
-                filter_topic = ui.select(["All topics"] + [t for t in TOPIC_OPTIONS if t != "All topics"], value="All topics", label="Topic").classes("flex-1")
-                filter_focus = ui.select(["All focus presets"] + FOCUS_OPTIONS, value="All focus presets", label="Focus").classes("flex-1")
-                filter_mission = ui.select(["All missions"] + list(mission_options.keys())[1:], value="All missions", label="Mission").classes("flex-1")
-                filter_step = ui.select(["All steps"] + CHAIN_STEP_OPTIONS, value="All steps", label="Step").classes("flex-1")
+            with ui.row().classes("w-full gap-3 ytis-card-row"):
+                default_filter_project = preferred_project_name(state, project_names)
+                filter_project = ui.select(["All projects"] + project_names, value=default_filter_project if default_filter_project in project_names else "All projects", label="Project").classes("flex-1 min-w-[180px]")
+                filter_topic = ui.select(["All topics"] + [t for t in TOPIC_OPTIONS if t != "All topics"], value="All topics", label="Topic").classes("flex-1 min-w-[180px]")
+                filter_focus = ui.select(["All focus presets"] + FOCUS_OPTIONS, value="All focus presets", label="Focus").classes("flex-1 min-w-[180px]")
+                filter_mission = ui.select(["All missions"] + list(mission_options.keys())[1:], value="All missions", label="Mission").classes("flex-1 min-w-[180px]")
+                filter_step = ui.select(["All steps"] + CHAIN_STEP_OPTIONS, value="All steps", label="Step").classes("flex-1 min-w-[180px]")
             search_text = ui.input("Search saved analyses").classes("w-full")
 
             with ui.row().classes("gap-2"):
@@ -241,8 +245,8 @@ def render_analysis_inbox(state: AppState) -> None:
                         return
                     for record in filtered:
                         with ui.card().classes("ytis-mini-card p-4 w-full"):
-                            with ui.row().classes("w-full justify-between items-start gap-3"):
-                                with ui.column().classes("gap-1 flex-1"):
+                            with ui.row().classes("w-full justify-between items-start gap-3 ytis-card-row"):
+                                with ui.column().classes("gap-1 flex-1 min-w-0"):
                                     ui.label(record.title).classes("font-bold text-lg")
                                     step_label = CHAIN_STEP_LABELS.get(record.chain_step, record.chain_step)
                                     ui.label(f"{record.created_at} | {record.topic} | {record.focus_preset} | {record.word_count:,} words").classes("text-xs text-slate-400")

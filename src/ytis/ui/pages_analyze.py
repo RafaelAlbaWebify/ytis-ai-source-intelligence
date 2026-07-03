@@ -5,6 +5,7 @@ from nicegui import ui
 from ytis.core.analysis_prompts import PROMPT_TEMPLATES, generate_prompt, save_prompt
 from ytis.ui.components import open_path
 from ytis.ui.formatting import compact_number, full_number
+from ytis.ui.context import preferred_project_name
 from ytis.ui.layout import render_shell
 from ytis.ui.state import short_path, val
 from ytis.ui.state import AppState
@@ -19,20 +20,19 @@ def render_analyze(state: AppState) -> None:
 
     projects = state.load_projects()
     project_names = [val(p, "name", "Unnamed") for p in projects]
-    latest = state.current_project or state.load_latest_project()
-    default_project = val(latest, "name", project_names[0] if project_names else "")
+    default_project = preferred_project_name(state, project_names)
 
     with ui.column().classes("ytis-page gap-4"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Analyze").classes("text-3xl font-bold")
                 ui.label("Generate ready-to-copy prompts for ChatGPT analysis of YTIS research packs").classes("text-sm text-slate-300")
-            with ui.row().classes("gap-2"):
-                ui.button("Inspect Pack", icon="inventory_2", on_click=lambda: ui.navigate.to("/inspect")).props("outline")
+            with ui.row().classes("gap-2 flex-wrap"):
+                ui.button("Inspect Pack", icon="inventory_2", on_click=lambda: ui.navigate.to("/inspector")).props("outline")
                 ui.button("Build New Pack", icon="add", on_click=lambda: ui.navigate.to("/build"), color="primary")
 
-        with ui.grid(columns=3).classes("w-full gap-4"):
-            with ui.card().classes("ytis-card p-5 w-full").style("grid-column: span 2;"):
+        with ui.grid().classes("ytis-grid-3"):
+            with ui.card().classes("ytis-card p-5 w-full"):
                 ui.label("Prompt Builder").classes("text-xl font-bold")
                 selected_project = ui.select(
                     project_names,
@@ -44,7 +44,7 @@ def render_analyze(state: AppState) -> None:
                     "Extra notes / focus",
                     placeholder="Example: Focus on service ideas for Webify, pricing, workflows, and what I can implement realistically.",
                 ).classes("w-full").props("rows=3")
-                with ui.row().classes("gap-2 mt-2"):
+                with ui.row().classes("gap-2 mt-2 flex-wrap"):
                     generate_button = ui.button("Generate Prompt", icon="psychology", color="primary")
                     copy_button = ui.button("Copy Prompt", icon="content_copy").props("outline")
                     save_button = ui.button("Save MD", icon="save").props("outline")
@@ -65,7 +65,7 @@ def render_analyze(state: AppState) -> None:
                 ui.label("No AI API calls are made here. This page prepares your upload prompt.").classes("text-xs text-blue-300")
 
         with ui.card().classes("ytis-card p-5 w-full"):
-            with ui.row().classes("w-full justify-between items-center"):
+            with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
                 with ui.column().classes("gap-0"):
                     ui.label("Prompt Preview").classes("text-xl font-bold")
                     prompt_stats = ui.label("No prompt generated yet.").classes("text-xs text-slate-400")

@@ -4,6 +4,7 @@ from nicegui import ui
 
 from ytis.core.pack_inspector import inspect_pack
 from ytis.ui.components import open_path
+from ytis.ui.context import preferred_project_name
 from ytis.ui.layout import render_shell
 from ytis.ui.state import AppState, val
 
@@ -25,15 +26,14 @@ def _preview_color(status: str) -> str:
 
 
 def render_inspect(state: AppState) -> None:
-    render_shell(state, "/inspect")
+    render_shell(state, "/inspector")
 
     projects = state.load_projects()
     project_names = [val(p, "name", "Unnamed") for p in projects]
-    latest = state.current_project or state.load_latest_project()
-    default_project = val(latest, "name", project_names[0] if project_names else "")
+    default_project = preferred_project_name(state, project_names)
 
     with ui.column().classes("ytis-page gap-4"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Inspect Pack").classes("text-3xl font-bold")
                 ui.label("Verify the actual ZIP contents before upload").classes("text-sm text-slate-300")
@@ -63,7 +63,7 @@ def render_inspect(state: AppState) -> None:
 
                 report = inspect_pack(project)
 
-                with ui.grid(columns=5).classes("w-full gap-3"):
+                with ui.grid().classes("ytis-grid-5"):
                     with ui.card().classes("ytis-metric p-4"):
                         ui.label("Status").classes("text-sm text-slate-400")
                         ui.label(report.status.upper()).classes(f"text-2xl font-bold {_status_color(report.status)}")
@@ -80,7 +80,7 @@ def render_inspect(state: AppState) -> None:
                         ui.label("Preview").classes("text-sm text-slate-400")
                         ui.label(report.preview_status.upper()).classes(f"text-2xl font-bold {_preview_color(report.preview_status)}")
 
-                with ui.grid(columns=2).classes("w-full gap-4"):
+                with ui.grid().classes("ytis-grid-2"):
                     with ui.card().classes("ytis-card p-5 w-full"):
                         ui.label("Upload Readiness").classes("text-xl font-bold")
                         ui.label(report.issue_text()).classes("text-sm text-slate-300")
@@ -116,7 +116,7 @@ def render_inspect(state: AppState) -> None:
                         if report.preview_project_image_path:
                             ui.label(report.preview_project_image_path).classes("text-xs text-slate-500 break-all")
 
-                with ui.grid(columns=2).classes("w-full gap-4"):
+                with ui.grid().classes("ytis-grid-2"):
                     with ui.card().classes("ytis-card p-5 w-full"):
                         ui.label("Expected Files").classes("text-xl font-bold")
                         for expected, present in report.expected_present.items():
@@ -143,7 +143,7 @@ def render_inspect(state: AppState) -> None:
                     if not report.largest_files:
                         ui.label("No files found.").classes("text-slate-400")
                     for item in report.largest_files:
-                        with ui.row().classes("w-full justify-between gap-3 border-b border-slate-800 py-1"):
+                        with ui.row().classes("w-full justify-between gap-3 border-b border-slate-800 py-1 ytis-card-row"):
                             ui.label(str(item["name"])).classes("text-xs text-slate-300 break-all")
                             ui.label(f'{item["size_mb"]} MB').classes("text-xs text-blue-300")
 

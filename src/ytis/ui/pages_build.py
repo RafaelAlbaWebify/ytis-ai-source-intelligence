@@ -23,29 +23,33 @@ def render_build(state: AppState) -> None:
     render_shell(state, "/build")
 
     with ui.column().classes("ytis-page gap-4"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Build Research Pack").classes("text-3xl font-bold")
                 ui.label("Create or refresh upload-ready transcript packages").classes("text-sm text-slate-300")
-            ui.button("Inspect Pack", icon="inventory_2", on_click=lambda: ui.navigate.to("/inspect"), color="primary")
+            ui.button("Inspector", icon="inventory_2", on_click=lambda: ui.navigate.to("/inspector"), color="primary")
 
-        with ui.row().classes("w-full gap-4 items-start"):
-            with ui.column().classes("gap-4").style("flex: 1.35; min-width: 520px;"):
+        with ui.card().classes("ytis-card p-4 w-full"):
+            ui.label("Operator flow").classes("font-bold text-cyan-300")
+            ui.label("1. Enter a project name and YouTube channel/video URL. 2. Keep reuse for normal packaging. 3. Build the pack. 4. Let YTIS capture the source preview automatically. 5. Use Inspector before uploading the ZIP to ChatGPT.").classes("text-sm text-slate-300")
+
+        with ui.row().classes("w-full gap-4 items-start ytis-card-row"):
+            with ui.column().classes("gap-4 ytis-flex-main"):
                 with ui.card().classes("ytis-card p-5 w-full"):
                     ui.label("Build Settings").classes("text-xl font-bold")
 
                     name = ui.input("Project name", value=state.current_project.get("name", "") if state.current_project else "").classes("w-full")
                     url = ui.input("Channel/Video URL", value=state.current_project.get("url", "") if state.current_project else "").classes("w-full")
-                    with ui.row().classes("w-full gap-3"):
-                        lang = ui.select(["en", "es"], value=state.current_project.get("language", "en") if state.current_project else "en", label="Language").classes("flex-1")
-                        output = ui.input("Downloads output folder", value=str(state.downloads_dir)).classes("flex-[2]")
+                    with ui.row().classes("w-full gap-3 ytis-card-row"):
+                        lang = ui.select(["en", "es"], value=state.current_project.get("language", "en") if state.current_project else "en", label="Language").classes("flex-1 min-w-[120px]")
+                        output = ui.input("Downloads output folder", value=str(state.downloads_dir)).classes("flex-[2] min-w-[260px]")
                     mode = ui.select(["reuse", "refresh", "repackage"], value="reuse", label="Build mode").classes("w-full")
                     ui.label("reuse = existing subtitles | refresh = YouTube | repackage = ZIP from existing files").classes("text-xs text-slate-400")
 
                     progress = ui.linear_progress(value=0).classes("w-full mt-3")
                     status = ui.label("Ready").classes("text-sm text-slate-300")
 
-                    with ui.row().classes("gap-2 mt-2"):
+                    with ui.row().classes("gap-2 mt-2 flex-wrap"):
                         build_button = ui.button("Build Research Pack", icon="rocket_launch", color="primary")
                         open_downloads = ui.button("Open Downloads", icon="folder_open").props("outline")
                         open_zip = ui.button("Open ZIP", icon="inventory_2").props("outline")
@@ -60,7 +64,7 @@ def render_build(state: AppState) -> None:
                         ui.label("Build output and automatic preview capture").classes("text-xs text-slate-400")
                     log = ui.log(max_lines=500).classes("ytis-log w-full p-3").style("height: 330px;")
 
-            with ui.column().classes("gap-4").style("flex: 0.9; min-width: 360px;"):
+            with ui.column().classes("gap-4 ytis-flex-side"):
                 preview_container = ui.column().classes("w-full")
                 with ui.card().classes("ytis-card p-5 w-full"):
                     ui.label("Automatic Source Preview").classes("text-xl font-bold")
@@ -79,6 +83,13 @@ def render_build(state: AppState) -> None:
 
         def render_preview(preview: SourcePreview | None = None) -> None:
             preview_container.clear()
+            if not (url.value or "").strip() and not (name.value or "").strip() and preview is None:
+                preview_state["preview"] = None
+                with preview_container:
+                    with ui.card().classes("ytis-card p-5 w-full"):
+                        ui.label("Source Preview").classes("text-xl font-bold")
+                        ui.label("Enter a project name and YouTube URL to preview the source. The image is captured during build.").classes("text-sm text-slate-400")
+                return
             if preview is None:
                 project_dir = expected_project_dir()
                 preview = existing_preview(project_dir, url.value or "", name.value or "") or preview_from_url_only(url.value or "", name.value or "")

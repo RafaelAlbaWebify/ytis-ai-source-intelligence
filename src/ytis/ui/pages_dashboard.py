@@ -46,7 +46,7 @@ STEP_TO_TOPIC = {
 
 
 def _project_root(state: AppState) -> Path:
-    return Path(getattr(state, "project_root", "") or Path.cwd())
+    return Path(getattr(state, "project_root_path", None) or getattr(state, "project_root", "") or Path.cwd())
 
 
 def _state_dir(project_root: Path) -> Path:
@@ -329,11 +329,11 @@ def _render_dashboard_body(state: AppState) -> None:
     mission = _select_current_mission(project_root, missions)
 
     with ui.column().classes("ytis-page gap-2"):
-        with ui.row().classes("w-full justify-between items-center"):
+        with ui.row().classes("w-full justify-between items-center ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("YTIS Dashboard").classes("text-2xl font-bold")
                 ui.label("The Dashboard guides the full ChatGPT loop: copy the YTIS prompt, paste it into ChatGPT, then save the ChatGPT answer here.").classes("text-xs text-slate-400")
-            with ui.row().classes("gap-1"):
+            with ui.row().classes("gap-1 flex-wrap justify-end"):
                 ui.button("Missions", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
                 ui.button("Build", icon="construction", on_click=lambda: ui.navigate.to("/build")).props("outline dense")
                 ui.button("Search", icon="search", on_click=lambda: ui.navigate.to("/search")).props("outline dense")
@@ -365,18 +365,18 @@ def _render_dashboard_body(state: AppState) -> None:
         options = _mission_select_options(missions)
 
         with ui.card().classes("ytis-card p-3 w-full"):
-            with ui.row().classes("w-full items-center justify-between gap-3"):
-                with ui.column().classes("gap-0 flex-1"):
+            with ui.row().classes("w-full items-center justify-between gap-3 ytis-card-row"):
+                with ui.column().classes("gap-0 flex-1 min-w-0"):
                     ui.label(str(_get_attr(mission, "name", "Untitled mission"))).classes("text-xl font-bold")
                     ui.label(f"Next action: {next_label}").classes("text-base font-bold text-cyan-300")
-                with ui.row().classes("gap-1 items-center"):
+                with ui.row().classes("gap-1 items-center flex-wrap"):
                     ui.badge(f"{done}/5 done").props("color=blue")
                     ui.button("Manager", icon="flag", on_click=lambda: ui.navigate.to("/missions")).props("outline dense")
-            with ui.row().classes("w-full items-center gap-2 mt-1"):
+            with ui.row().classes("w-full items-center gap-2 mt-1 ytis-card-row"):
                 if options:
                     current_id = str(_get_attr(mission, "mission_id", ""))
                     current_label = next((label for label, mid in options.items() if mid == current_id), None)
-                    selector = ui.select(options=list(options.keys()), value=current_label, label="Current mission").classes("flex-1")
+                    selector = ui.select(options=list(options.keys()), value=current_label, label="Current mission").classes("flex-1 min-w-[260px]")
                     selector.props("dense")
                     def _switch_current_mission(e) -> None:
                         selected_label = str(e.args or "")
@@ -417,9 +417,12 @@ def _render_dashboard_body(state: AppState) -> None:
                     if next_step:
                         ui.label("LEFT panel: YTIS prompt to send to ChatGPT. RIGHT panel: paste the ChatGPT answer you received, then click Save ChatGPT Answer and Advance.").classes("text-sm text-slate-300")
                     else:
-                        ui.label("This mission has no pending prompt-chain steps. Review saved answers or create Knowledge Cards.").classes("text-sm text-green-300")
+                        ui.label("Mission complete. Review the saved answers, then turn the strongest findings into Knowledge Cards.").classes("text-sm text-green-300")
+                        with ui.row().classes("gap-2 flex-wrap mt-2"):
+                            ui.button("Review Analysis Library", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-library")).props("outline dense")
+                            ui.button("Create Knowledge Cards", icon="category", on_click=lambda: ui.navigate.to("/knowledge"), color="primary").props("dense")
 
-        with ui.grid(columns=2).classes("w-full gap-3"):
+        with ui.grid().classes("ytis-grid-2"):
             with ui.card().classes("ytis-card p-4 w-full"):
                 with ui.row().classes("w-full justify-between items-center"):
                     with ui.column().classes("gap-0"):
@@ -436,6 +439,8 @@ def _render_dashboard_body(state: AppState) -> None:
                         ui.button("Open ChatGPT", icon="open_in_new", on_click=_open_chatgpt).props("outline dense")
                 else:
                     ui.label("All mission steps have saved answers.").classes("text-green-300")
+                    ui.label("Nothing else needs to be copied to ChatGPT for this mission.").classes("text-sm text-slate-400")
+                    ui.button("Open Analysis Library", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-library")).props("outline dense")
 
             with ui.card().classes("ytis-card p-4 w-full"):
                 with ui.row().classes("w-full justify-between items-center"):
@@ -488,9 +493,11 @@ def _render_dashboard_body(state: AppState) -> None:
                         ui.button("Clear", icon="backspace", on_click=lambda: (setattr(answer_box, "value", ""), answer_box.update())).props("outline")
                 else:
                     ui.label("No pending step to save.").classes("text-green-300")
+                    ui.label("Next recommended action: create Knowledge Cards from the completed Webify validation findings.").classes("text-sm text-slate-400")
+                    ui.button("Open Knowledge Cards", icon="category", on_click=lambda: ui.navigate.to("/knowledge"), color="primary").props("dense")
 
         with ui.expansion("Details: lifecycle, sources, saved answers, system", icon="tune", value=False).classes("ytis-card w-full text-white").props("dense"):
-            with ui.grid(columns=4).classes("w-full gap-3 p-3"):
+            with ui.grid().classes("ytis-grid-4 p-3"):
                 with ui.card().classes("ytis-mini-card p-3 w-full"):
                     ui.label("Mission lifecycle").classes("font-bold")
                     rename_input = ui.input("Rename current mission", value=str(_get_attr(mission, "name", ""))).classes("w-full").props("dense")
@@ -545,7 +552,7 @@ def _render_dashboard_body(state: AppState) -> None:
                     ui.label(f"Missions: {stats.get('missions', len(missions))} | Active: {stats.get('active', 0)} | Archived: {stats.get('archived', 0)}").classes("text-sm")
                     ui.label(f"Projects: {len(projects)} | Analyses: {len(records)}").classes("text-sm")
                     with ui.row().classes("gap-1 mt-1"):
-                        ui.button("Analysis", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-inbox")).props("outline dense")
+                        ui.button("Analysis Library", icon="move_to_inbox", on_click=lambda: ui.navigate.to("/analysis-library")).props("outline dense")
                         ui.button("Health", icon="monitor_heart", on_click=lambda: ui.navigate.to("/health")).props("outline dense")
 
 

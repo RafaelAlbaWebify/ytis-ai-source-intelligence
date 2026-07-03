@@ -374,7 +374,7 @@ def export_analyses_zip(records: list[AnalysisRecord], downloads_dir: Path, name
         zf.writestr(
             "README.md",
             "# YTIS Analysis Export\n\n"
-            "This ZIP contains saved ChatGPT analyses from the YTIS Analysis Inbox.\n"
+            "This ZIP contains saved ChatGPT analyses from the YTIS Analysis Library.\n"
             "Each folder contains analysis.md, metadata.json, and notes.md when available.\n",
         )
     return zip_path
