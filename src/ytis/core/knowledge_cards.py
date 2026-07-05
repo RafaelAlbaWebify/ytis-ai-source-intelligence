@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ytis.core.io_utils import atomic_write_json, atomic_write_text, now_stamp, unique_child_path
+
 
 CARD_TYPES = [
     "Service idea",
@@ -339,7 +341,8 @@ def update_card_from_template(
     effective_source_id = source_analysis_id or str(data.get("source_analysis_id") or card.source_analysis_id or "")
     effective_source_title = source_analysis_title or str(data.get("source_analysis_title") or card.source_analysis_title or "")
 
-    card.card_path.write_text(
+    atomic_write_text(
+        card.card_path,
         _compose_card_markdown(
             title=template.title,
             card_type=template.card_type,
@@ -367,7 +370,7 @@ def update_card_from_template(
         "updated_at": updated_at,
         "summary": _summary(template.content),
     })
-    card.metadata_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(card.metadata_path, data)
     return _card_from_data(card.folder, data)
 
 
@@ -440,7 +443,7 @@ def _now() -> str:
 
 
 def _stamp() -> str:
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
+    return now_stamp()
 
 
 def _summary(text: str, max_chars: int = 220) -> str:
@@ -513,9 +516,10 @@ def save_card(
 ) -> KnowledgeCard:
     created_at = _now()
     title_clean = title.strip() or "Untitled card"
-    card_id = f"{_stamp()}_{safe_slug(title_clean)}"
-    folder = cards_root(project_root) / card_id
-    folder.mkdir(parents=True, exist_ok=True)
+    card_stem = f"{_stamp()}_{safe_slug(title_clean)}"
+    folder = unique_child_path(cards_root(project_root), card_stem)
+    folder.mkdir(parents=True, exist_ok=False)
+    card_id = folder.name
 
     clean_tags = parse_tags(tags)
     card_path = folder / "card.md"
@@ -534,7 +538,7 @@ def save_card(
         source_analysis_id=source_analysis_id,
         source_analysis_title=source_analysis_title,
     )
-    card_path.write_text(md, encoding="utf-8")
+    atomic_write_text(card_path, md, encoding="utf-8")
 
     metadata = {
         "card_id": card_id,
@@ -551,7 +555,7 @@ def save_card(
         "card_path": str(card_path),
         "summary": _summary(body),
     }
-    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(metadata_path, metadata)
     return _card_from_data(folder, metadata)
 
 
@@ -651,7 +655,7 @@ def update_card_status(card: KnowledgeCard, status: str) -> None:
     updated_at = _now()
     data["status"] = status
     data["updated_at"] = updated_at
-    card.metadata_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(card.metadata_path, data)
 
     if card.card_path.exists():
         try:
@@ -661,7 +665,7 @@ def update_card_status(card: KnowledgeCard, status: str) -> None:
                 text = re.sub(r"^Updated: .*?$", f"Updated: {updated_at}", text, count=1, flags=re.M)
             else:
                 text = re.sub(r"^(Created: .*?\n\n)", r"\1" + f"Updated: {updated_at}\n\n", text, count=1, flags=re.M)
-            card.card_path.write_text(text, encoding="utf-8")
+            atomic_write_text(card.card_path, text, encoding="utf-8")
         except Exception:
             pass
 

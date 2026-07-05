@@ -14,3 +14,35 @@ missions_deleted/
 ytis_state/
 webify_validation_kit_v1/
 patch_backup_*/
+
+# YTIS generated local artifacts
+.venv/
+__pycache__/
+*.pyc
+patch_backup*/
+analysis_results/
+knowledge_cards/
+missions/
+missions_deleted/
+ytis_state/
+projects/projects_index.json
+projects/*_YTIS_RESEARCH_READY/
+
+# YTIS transactional builder artifacts
+projects/_ytis_build_staging/
+projects/_ytis_failed_builds/
+projects/_ytis_build_backups/
+# YTIS local/generated artifacts
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+projects/**/*.tmp_*.zip
+*.tmp_*.zip
+YTIS_UI_AUDIT_*/
+YTIS_*_HANDOFF_*/
+YTIS_*_FINAL_ACTION_PACK_*/
+YTIS_*_IMPORT_PROOF_*/
+# YTIS local generated artifacts
+.ytis_staging/
+.ytis_backups/
+exports/

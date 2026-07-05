@@ -37,14 +37,14 @@ def _video_id_from_name(name: str) -> str:
 
 
 def _count_unique_ids(files: list[Path]) -> tuple[int, list[str]]:
-    ids: list[str] = []
+    counts: dict[str, int] = {}
     for path in files:
         video_id = _video_id_from_name(path.name)
         if video_id:
-            ids.append(video_id)
+            counts[video_id] = counts.get(video_id, 0) + 1
 
-    duplicates = sorted({video_id for video_id in ids if ids.count(video_id) > 1})
-    return len(set(ids)), duplicates
+    duplicates = sorted(video_id for video_id, count in counts.items() if count > 1)
+    return len(counts), duplicates
 
 
 def _safe_path(project: dict[str, Any], key: str) -> Path | None:

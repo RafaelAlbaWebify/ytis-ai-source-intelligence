@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from ytis.core.io_utils import atomic_write_json, read_json
 
 
 def registry_path(base_projects_dir: Path) -> Path:
@@ -11,22 +12,13 @@ def registry_path(base_projects_dir: Path) -> Path:
 
 
 def read_registry(base_projects_dir: Path) -> dict[str, Any]:
-    path = registry_path(base_projects_dir)
-    if not path.exists():
-        return {"projects": []}
-
-    try:
-        return json.loads(path.read_text(encoding="utf-8-sig"))
-    except Exception:
-        return {"projects": []}
+    data = read_json(registry_path(base_projects_dir), {"projects": []})
+    return data if isinstance(data, dict) else {"projects": []}
 
 
 def write_registry(base_projects_dir: Path, data: dict[str, Any]) -> None:
     base_projects_dir.mkdir(parents=True, exist_ok=True)
-    registry_path(base_projects_dir).write_text(
-        json.dumps(data, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    atomic_write_json(registry_path(base_projects_dir), data)
 
 
 def upsert_project(base_projects_dir: Path, summary: dict[str, Any]) -> None:

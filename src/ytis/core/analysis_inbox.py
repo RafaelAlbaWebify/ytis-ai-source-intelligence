@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ytis.core.io_utils import atomic_write_json, atomic_write_text, now_stamp, unique_child_path
+
 
 FOCUS_OPTIONS = [
     "Business lessons",
@@ -56,11 +58,11 @@ CHAIN_STEP_OPTIONS = [
 ]
 
 CHAIN_STEP_LABELS = {
-    "STEP_01_extract_map": "Step 1 - Extract and map",
-    "STEP_02_compare_patterns": "Step 2 - Compare patterns",
-    "STEP_03_extract_workflows": "Step 3 - Extract workflows",
-    "STEP_04_apply_to_rafael_webify": "Step 4 - Apply to Rafael/Webify",
-    "STEP_05_validation_plan": "Step 5 - Validation plan",
+    "STEP_01_extract_map": "Step 1 - Source credibility and topic map",
+    "STEP_02_compare_patterns": "Step 2 - Career and business value extraction",
+    "STEP_03_extract_workflows": "Step 3 - Workflows, labs, and operating systems",
+    "STEP_04_apply_to_rafael_webify": "Step 4 - Rafael fit, risks, and positioning",
+    "STEP_05_validation_plan": "Step 5 - Action roadmap, cards, and next searches",
 }
 
 
@@ -122,11 +124,11 @@ def save_analysis(
     chain_step: str = "Unassigned",
 ) -> AnalysisRecord:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     title_clean = title.strip() or "Untitled analysis"
-    record_id = f"{stamp}_{safe_slug(title_clean)}"
-    folder = analysis_root(project_root) / record_id
-    folder.mkdir(parents=True, exist_ok=True)
+    record_stem = f"{now_stamp()}_{safe_slug(title_clean)}"
+    folder = unique_child_path(analysis_root(project_root), record_stem)
+    folder.mkdir(parents=True, exist_ok=False)
+    record_id = folder.name
 
     analysis_path = folder / "analysis.md"
     metadata_path = folder / "metadata.json"
@@ -148,9 +150,9 @@ def save_analysis(
     if source_evidence_pack:
         md += f"Source evidence pack: `{source_evidence_pack}`\n\n"
     md += "---\n\n" + body + "\n"
-    analysis_path.write_text(md, encoding="utf-8")
+    atomic_write_text(analysis_path, md, encoding="utf-8")
 
-    notes_path.write_text((notes.strip() + "\n") if notes.strip() else "", encoding="utf-8")
+    atomic_write_text(notes_path, (notes.strip() + "\n") if notes.strip() else "", encoding="utf-8")
 
     metadata = {
         "record_id": record_id,
@@ -169,7 +171,7 @@ def save_analysis(
         "word_count": _word_count(body),
         "summary": _summary(body),
     }
-    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(metadata_path, metadata)
     return _record_from_data(folder, metadata)
 
 

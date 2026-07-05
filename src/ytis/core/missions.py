@@ -9,7 +9,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ytis.core.io_utils import atomic_write_json, atomic_write_text, now_stamp, unique_child_path
+
 MISSION_FOCUS_OPTIONS = [
+    "Career learning",
+    "Business model extraction",
+    "Career + business",
+    "Expert/source credibility",
+    "Study/build roadmap",
+    "Search discovery",
     "Business lessons",
     "Offers and pricing",
     "Lead generation",
@@ -20,24 +28,36 @@ MISSION_FOCUS_OPTIONS = [
 ]
 
 MISSION_TOPIC_OPTIONS = [
-    "Pricing",
+    "Application Support",
+    "Production support",
+    "Troubleshooting",
+    "Logs",
+    "Monitoring",
+    "SQL support",
+    "APIs",
+    "RCA",
+    "Cloud basics",
+    "DevOps basics",
+    "Build projects",
+    "Interview preparation",
+    "Business model",
+    "Monetization",
     "Offer",
+    "Pricing",
     "Lead generation",
-    "Sales call",
-    "Cold email",
-    "Funnel",
-    "Agency",
-    "MSP",
-    "Niche",
-    "Onboarding",
-    "Content",
-    "Ads",
     "Workflow",
-    "Technical learning",
+    "Niche",
     "Webify service ideas",
+    "Technical learning",
 ]
 
 MISSION_TEMPLATES: dict[str, str] = {
+    "Career learning": "Extract practical career lessons from the selected expert/source evidence. Identify what Rafael should study, practice, build, document, and explain in interviews. Keep the output aligned with Application Support, software support, IT operations, troubleshooting, evidence gathering, documentation, and production-support growth.",
+    "Business model extraction": "Analyze how the selected expert/source appears to make money. Extract the business model, offer, customer, pricing clues, delivery workflow, acquisition path, proof requirements, risks, and what Rafael could or should not adapt. Separate transcript-backed evidence from assumptions.",
+    "Career + business": "Extract both career-learning value and business-model value from the selected expert/source evidence. Identify skills, workflows, study/build actions, monetization patterns, acquisition clues, credibility signals, hype risks, and Rafael-fit conclusions.",
+    "Expert/source credibility": "Evaluate whether the selected YouTube expert/source is worth studying. Assess credibility, practical examples, evidence quality, specificity, hype risk, and relevance to Rafael before turning the source into study or business actions.",
+    "Study/build roadmap": "Turn the selected source evidence into a realistic study and build roadmap for Rafael, including what to learn, what lab or project to build, what documentation to create, and what interview talking points to prepare.",
+    "Search discovery": "Extract better search angles, YouTube queries, expert types, niche research paths, and source-selection criteria from the selected evidence or goal.",
     "Webify service ideas": "Extract realistic service ideas, offer structures, pricing clues, acquisition workflows, and validation steps for Webify Digital Solutions. Avoid positioning Rafael as a generic developer or agency unless transcript evidence strongly supports it.",
     "Offer design": "Study how offers are packaged, positioned, priced, guaranteed, sold, and differentiated. Extract practical offer patterns and weak assumptions.",
     "Lead generation": "Study how leads are generated, qualified, followed up, and converted. Extract repeatable outreach, content, funnel, and sales workflows.",
@@ -49,28 +69,28 @@ MISSION_TEMPLATES: dict[str, str] = {
 CHAIN_STEPS = [
     {
         "name": "01_extract_map",
-        "title": "Extract and map the source material",
-        "task": "Create a structured map of the uploaded source material. Identify the main themes, repeated ideas, important examples, and project/channel differences. Do not produce final recommendations yet.",
+        "title": "Source credibility and topic map",
+        "task": "Map what the selected source actually teaches. Identify main topics, practical examples, credibility signals, weak evidence, hype risk, and relevance to the mission goal. Do not produce final recommendations yet.",
     },
     {
         "name": "02_compare_patterns",
-        "title": "Compare patterns and contradictions",
-        "task": "Compare the extracted material across projects/channels. Identify repeated patterns, unique advice, contradictions, and claims that need skepticism or validation.",
+        "title": "Career and business value extraction",
+        "task": "Extract the useful career-learning value and/or business-model value requested by the mission. Identify skills, tools, workflows, monetization patterns, customer/audience clues, offer/pricing clues, and contradictions.",
     },
     {
         "name": "03_extract_workflows",
-        "title": "Extract workflows and operating systems",
-        "task": "Extract concrete workflows, checklists, scripts, SOPs, frameworks, and repeatable processes. Make them practical and step-by-step.",
+        "title": "Workflows, labs, and operating systems",
+        "task": "Turn the strongest findings into concrete workflows, checklists, labs, study tasks, build projects, templates, scripts, or operating systems. Make them practical and step-by-step.",
     },
     {
         "name": "04_apply_to_rafael_webify",
-        "title": "Apply findings to Rafael and Webify",
-        "task": "Apply the findings to Rafael Alba and Webify Digital Solutions. Respect his real background in IT operations, application support, Microsoft 365, DNS, manufacturing IT, incident management, documentation, and troubleshooting. Do not position him as a generic developer, cybersecurity expert, cloud architect, DBA, or software agency unless the source evidence strongly supports it.",
+        "title": "Rafael fit, risks, and positioning",
+        "task": "Apply the findings to Rafael Alba. Respect his real background in IT operations, application support, Microsoft 365, DNS/email basics, manufacturing IT, SQL-dependent applications from the support side, incident management, documentation, and troubleshooting. Separate what fits now, what fits later, and what should be avoided.",
     },
     {
         "name": "05_validation_plan",
-        "title": "Build validation and action plan",
-        "task": "Turn the previous findings into a validation plan. Separate what to test now, what to ignore, what evidence is weak, and what actions should be done in the next 7, 30, and 90 days.",
+        "title": "Action roadmap, cards, and next searches",
+        "task": "Turn the mission findings into a 7-day and 30-day action roadmap. Include study/build actions, possible Knowledge Cards, business tests if relevant, open questions, and better YouTube search queries to find stronger sources.",
     },
 ]
 
@@ -116,7 +136,7 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def _stamp() -> str:
-    return datetime.now().strftime("%Y%m%d_%H%M%S")
+    return now_stamp()
 
 def _mission_from_data(folder: Path, data: dict[str, Any]) -> Mission:
     return Mission(
@@ -144,9 +164,10 @@ def create_mission(
     status: str = "active",
 ) -> Mission:
     clean_name = name.strip() or "Untitled mission"
-    mission_id = f"{_stamp()}_{safe_slug(clean_name)}"
-    folder = missions_root(project_root) / mission_id
-    folder.mkdir(parents=True, exist_ok=True)
+    mission_stem = f"{_stamp()}_{safe_slug(clean_name)}"
+    folder = unique_child_path(missions_root(project_root), mission_stem)
+    folder.mkdir(parents=True, exist_ok=False)
+    mission_id = folder.name
     (folder / "bundles").mkdir(exist_ok=True)
     (folder / "evidence_packs").mkdir(exist_ok=True)
     (folder / "analyses").mkdir(exist_ok=True)
@@ -164,9 +185,9 @@ def create_mission(
         "created_at": created,
         "updated_at": created,
     }
-    (folder / "mission.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(folder / "mission.json", data)
     mission = _mission_from_data(folder, data)
-    mission.prompt_path.write_text(generate_mission_prompt(mission, []), encoding="utf-8")
+    atomic_write_text(mission.prompt_path, generate_mission_prompt(mission, []), encoding="utf-8")
     return mission
 
 def save_mission(mission: Mission) -> None:
@@ -182,8 +203,8 @@ def save_mission(mission: Mission) -> None:
         "created_at": mission.created_at,
         "updated_at": mission.updated_at,
     }
-    mission.metadata_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    mission.prompt_path.write_text(generate_mission_prompt(mission, []), encoding="utf-8")
+    atomic_write_json(mission.metadata_path, data)
+    atomic_write_text(mission.prompt_path, generate_mission_prompt(mission, []), encoding="utf-8")
 
 def list_missions(project_root: Path) -> list[Mission]:
     root = missions_root(project_root)
@@ -331,17 +352,19 @@ def create_prompt_chain_pack(mission: Mission, projects: list[dict[str, Any]], d
     step_paths: list[Path] = []
     for index, (name, prompt) in enumerate(prompts, start=1):
         path = chain_root / f"STEP_{index:02d}_{name}.md"
-        path.write_text(prompt, encoding="utf-8")
+        atomic_write_text(path, prompt, encoding="utf-8")
         step_paths.append(path)
 
     combined = chain_root / "ALL_STEPS_COMBINED.md"
-    combined.write_text(
+    atomic_write_text(
+        combined,
         "\n\n---\n\n".join(path.read_text(encoding="utf-8") for path in step_paths),
         encoding="utf-8",
     )
 
     readme = chain_root / "README_PROMPT_CHAIN.md"
-    readme.write_text(
+    atomic_write_text(
+        readme,
         f"""# YTIS Mission Prompt Chain
 
 Mission: {mission.name}
@@ -385,14 +408,14 @@ def create_mission_bundle(
 
     prompt = generate_mission_prompt(mission, selected)
     prompt_path = bundle_root / "MISSION_PROMPT.md"
-    prompt_path.write_text(prompt, encoding="utf-8")
-    mission.prompt_path.write_text(prompt, encoding="utf-8")
+    atomic_write_text(prompt_path, prompt, encoding="utf-8")
+    atomic_write_text(mission.prompt_path, prompt, encoding="utf-8")
 
     chain = generate_prompt_chain(mission, selected)
     chain_dir = bundle_root / "prompt_chain"
     chain_dir.mkdir(exist_ok=True)
     for index, (name, step_prompt) in enumerate(chain, start=1):
-        (chain_dir / f"STEP_{index:02d}_{name}.md").write_text(step_prompt, encoding="utf-8")
+        atomic_write_text(chain_dir / f"STEP_{index:02d}_{name}.md", step_prompt, encoding="utf-8")
 
     included: list[Path] = []
     skipped: list[str] = []
@@ -412,7 +435,8 @@ def create_mission_bundle(
         included.append(dst)
 
     readme = bundle_root / "README_MISSION_BUNDLE.md"
-    readme.write_text(
+    atomic_write_text(
+        readme,
         f"""# YTIS Mission Bundle
 
 Mission: {mission.name}

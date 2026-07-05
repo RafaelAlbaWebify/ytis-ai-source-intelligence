@@ -7,31 +7,53 @@ from ytis.ui.state import AppState
 
 NAV_GROUPS = [
     (
-        "Core",
+        "Cockpit",
         [
             ("Dashboard", "/", "dashboard"),
-            ("Build", "/build", "construction"),
-            ("Missions", "/missions", "flag"),
-            ("Library", "/library", "folder"),
         ],
     ),
     (
-        "Research",
+        "Sources",
+        [
+            ("Build Source Pack", "/build", "construction"),
+            ("Library", "/library", "folder"),
+            ("Inspector", "/inspector", "fact_check"),
+        ],
+    ),
+    (
+        "Mission",
+        [
+            ("Mission Manager", "/missions", "flag"),
+            ("Analysis Library", "/analysis-library", "move_to_inbox"),
+        ],
+    ),
+    (
+        "Discovery",
+        [
+            ("Research Radar", "/research-radar", "radar"),
+            ("Expert Intelligence", "/expert-intelligence", "psychology"),
+        ],
+    ),
+    (
+        "Evidence",
         [
             ("Search", "/search", "search"),
             ("Viewer", "/viewer", "article"),
-            ("Intelligence", "/intelligence", "hub"),
+            ("Evidence Explorer", "/intelligence", "hub"),
+        ],
+    ),
+    (
+        "Knowledge",
+        [
             ("Knowledge Cards", "/knowledge", "category"),
-            ("Analysis Library", "/analysis-library", "move_to_inbox"),
         ],
     ),
     (
         "Admin",
         [
-            ("Inspector", "/inspector", "fact_check"),
             ("Repair", "/repair", "healing"),
             ("Health", "/health", "monitor_heart"),
-            ("Analyze", "/analyze", "psychology"),
+            ("Prompt Builder", "/analyze", "psychology"),
         ],
     ),
 ]
@@ -267,6 +289,89 @@ def render_shell(state: AppState, active_path: str) -> None:
         body.ytis-sidebar-collapsed .ytis-sidebar-separator { display: none !important; }
         html.ytis-sidebar-collapsed .ytis-nav-collapsed,
         body.ytis-sidebar-collapsed .ytis-nav-collapsed { display: flex !important; }
+
+
+        /* YTIS professional dark theme overrides */
+        :root {
+            --ytis-bg: #07111f;
+            --ytis-bg-deep: #040a14;
+            --ytis-surface: #0d1829;
+            --ytis-surface-raised: #111f33;
+            --ytis-surface-soft: #16263d;
+            --ytis-border: #24344d;
+            --ytis-border-soft: rgba(148, 163, 184, 0.13);
+            --ytis-border-active: #3b82f6;
+            --ytis-text: #e5eef9;
+            --ytis-text-secondary: #aab8cc;
+            --ytis-text-muted: #71829a;
+            --ytis-blue: #3b82f6;
+            --ytis-blue-soft: rgba(59, 130, 246, 0.16);
+            --ytis-blue-hover: #60a5fa;
+            --ytis-green: #22c55e;
+            --ytis-green-soft: rgba(34, 197, 94, 0.14);
+            --ytis-amber: #f59e0b;
+            --ytis-amber-soft: rgba(245, 158, 11, 0.15);
+            --ytis-red: #ef4444;
+        }
+        html, body, .q-layout, .q-page-container, .nicegui-content {
+            background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.09), transparent 30%), var(--ytis-bg) !important;
+            color: var(--ytis-text) !important;
+        }
+        .ytis-page { color: var(--ytis-text) !important; }
+        .ytis-card,
+        .ytis-metric {
+            background: linear-gradient(180deg, rgba(17, 31, 51, 0.96), rgba(13, 24, 41, 0.96)) !important;
+            border: 1px solid var(--ytis-border-soft) !important;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18) !important;
+        }
+        .ytis-mini-card {
+            background: rgba(13, 24, 41, 0.88) !important;
+            border: 1px solid var(--ytis-border-soft) !important;
+        }
+        .ytis-muted, .text-slate-400 { color: var(--ytis-text-secondary) !important; }
+        .text-slate-500, .text-slate-600 { color: var(--ytis-text-muted) !important; }
+        .ytis-blue, .text-blue-300, .text-blue-400 { color: var(--ytis-blue-hover) !important; }
+        .ytis-green, .text-green-300, .text-green-400 { color: var(--ytis-green) !important; }
+        .ytis-log, .q-textarea textarea, .q-input input {
+            background: rgba(7, 17, 31, 0.92) !important;
+            color: var(--ytis-text) !important;
+        }
+        .q-field__control:before { border-color: rgba(170, 184, 204, 0.28) !important; }
+        .q-field--focused .q-field__control:after { border-color: var(--ytis-blue) !important; }
+        .q-btn.bg-primary, .q-btn.text-primary.bg-primary,
+        .q-btn[style*="background"] {
+            box-shadow: none !important;
+        }
+        .ytis-sidebar {
+            background: linear-gradient(180deg, #07111f 0%, #050b16 100%) !important;
+            border-right: 1px solid rgba(148, 163, 184, 0.12) !important;
+        }
+        .ytis-header {
+            background: rgba(4, 10, 20, 0.94) !important;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
+            backdrop-filter: blur(8px);
+        }
+        .ytis-brand-title { color: var(--ytis-text) !important; letter-spacing: .01em; }
+        .ytis-brand-subtitle { color: var(--ytis-text-secondary) !important; }
+        .ytis-nav-group { color: #8290a4 !important; letter-spacing: .11em; }
+        .ytis-nav-button,
+        .ytis-nav-rail-button {
+            color: var(--ytis-text-secondary) !important;
+        }
+        .ytis-nav-button:hover,
+        .ytis-nav-rail-button:hover {
+            background: rgba(59, 130, 246, 0.10) !important;
+            color: var(--ytis-text) !important;
+        }
+        .ytis-nav-active {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.30), rgba(59, 130, 246, 0.16)) !important;
+            border: 1px solid rgba(96, 165, 250, 0.28) !important;
+            color: #f8fbff !important;
+        }
+        .ytis-current-project-box {
+            border-top: 1px solid rgba(148, 163, 184, 0.12) !important;
+        }
+
         </style>
     """)
 
@@ -325,6 +430,8 @@ def register_pages(app_version: str = "") -> None:
     from ytis.ui.pages_analysis_inbox import render_analysis_inbox
     from ytis.ui.pages_missions import render_missions
     from ytis.ui.pages_knowledge import render_knowledge
+    from ytis.ui.pages_research_radar import render_research_radar
+    from ytis.ui.pages_expert_intelligence import render_expert_intelligence
 
     try:
         from ytis.ui.pages_inspect import render_inspect as render_inspector
@@ -414,6 +521,14 @@ def register_pages(app_version: str = "") -> None:
     @ui.page("/knowledge")
     def knowledge_page() -> None:
         render_knowledge(state)
+
+    @ui.page("/research-radar")
+    def research_radar_page() -> None:
+        render_research_radar(state)
+
+    @ui.page("/expert-intelligence")
+    def expert_intelligence_page() -> None:
+        render_expert_intelligence(state)
 
     @ui.page("/analysis-library")
     def analysis_library_page() -> None:
