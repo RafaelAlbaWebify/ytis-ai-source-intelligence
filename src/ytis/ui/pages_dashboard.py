@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import json
@@ -1210,7 +1210,7 @@ def _render_dashboard_body(state: AppState) -> None:
 
     if not project:
         next_title = "Start with a source"
-        next_body = "Paste a YouTube channel or choose an existing source so YTIS has evidence to analyze."
+        next_body = "Add public-safe source material or choose an existing source so YTIS has evidence to analyze. YouTube transcript packs are the first supported input."
         next_button = ("Start guided research", "rocket_launch", lambda: _render_guided_start_dialog(state, project_root, projects, "Career learning"))
         secondary_buttons = [("Open Sources", "folder", lambda: ui.navigate.to("/build"))]
     elif not mission:
@@ -1242,7 +1242,7 @@ def _render_dashboard_body(state: AppState) -> None:
                         ui.icon("construction").classes("text-2xl text-blue-400")
                         with ui.column().classes("gap-0 min-w-0"):
                             ui.label("YTIS").classes("ytis-title-main")
-                            ui.label("Guided Expert Intelligence OS").classes("ytis-title-sub")
+                            ui.label("Local AI Source Intelligence OS").classes("ytis-title-sub")
                     ui.label("What are you working on today?").classes("ytis-title-question")
                     ui.label("One screen. One next action. Advanced tools stay in the sidebar.").classes("ytis-title-sub")
 
@@ -1325,7 +1325,7 @@ def _render_dashboard_body(state: AppState) -> None:
                     with ui.element("div").classes("ytis-mode-grid-2"):
                         with ui.card().classes("ytis-cockpit-card ytis-compact-card"):
                             ui.label("Sources").classes("ytis-mode-headline")
-                            ui.label("Question: Is the YouTube evidence ready?").classes("ytis-tab-hint")
+                            ui.label("Question: Is the source evidence ready?").classes("ytis-tab-hint")
                             if project:
                                 ui.label(str(project.get("name", "Unnamed"))).classes("text-xl font-bold mt-3")
                                 ui.label(_source_ready_text(project)).classes("text-green-300")
@@ -1359,7 +1359,7 @@ def _render_dashboard_body(state: AppState) -> None:
                         with ui.card().classes("ytis-cockpit-card ytis-compact-card"):
                             ui.label("Research queue").classes("ytis-mode-headline")
                             ui.label(f"Saved queries: {_compact(queue_count)}").classes("text-green-300")
-                            ui.label("Next: search YouTube manually, choose one strong channel, then start a guided mission.").classes("text-sm text-slate-300 mt-2")
+                            ui.label("Next: choose one strong public-safe source, then start a guided mission.").classes("text-sm text-slate-300 mt-2")
 
                 with ui.tab_panel(knowledge_tab):
                     with ui.element("div").classes("ytis-mode-grid-2"):
@@ -1414,3 +1414,5 @@ def render_dashboard(state: AppState) -> None:
         _render_dashboard_body(state)
     except Exception as exc:
         _render_error_page(state, exc)
+
+

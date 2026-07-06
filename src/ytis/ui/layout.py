@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from nicegui import ui
 from ytis.ui.context import sidebar_context_label
@@ -380,7 +380,7 @@ def render_shell(state: AppState, active_path: str) -> None:
             with ui.row().classes("ytis-brand-row"):
                 with ui.column().classes("ytis-brand-text gap-0"):
                     ui.label("YTIS").classes("ytis-brand-title")
-                    ui.label("YouTube Intelligence System").classes("ytis-brand-subtitle")
+                    ui.label("AI Source Intelligence").classes("ytis-brand-subtitle")
                 ui.button(
                     icon="menu_open",
                     on_click=lambda: ui.run_javascript("window.ytisToggleSidebar && window.ytisToggleSidebar();"),
@@ -411,7 +411,7 @@ def render_shell(state: AppState, active_path: str) -> None:
 
     with ui.header().classes("bg-slate-950 text-white border-b border-slate-800 ytis-header"):
         with ui.row().classes("w-full justify-between items-center"):
-            ui.label("YTIS Local Research OS").classes("font-bold text-sm")
+            ui.label("YTIS AI Source Intelligence").classes("font-bold text-sm")
             ui.label(getattr(state, "app_version", "")).classes("text-xs text-slate-400")
 
 def register_pages(app_version: str = "") -> None:
@@ -541,3 +541,5 @@ def register_pages(app_version: str = "") -> None:
     @ui.page("/missions")
     def missions_page() -> None:
         render_missions(state)
+
+

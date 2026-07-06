@@ -1,48 +1,76 @@
+# Python environments and caches
 .venv/
+venv/
 __pycache__/
-*.pyc
-projects/*
-!projects/.gitkeep
-logs/
-*.zip
-.DS_Store
-Thumbs.db
-analysis_results/
-knowledge_cards/
-missions/
-missions_deleted/
-ytis_state/
-webify_validation_kit_v1/
-patch_backup_*/
-
-# YTIS generated local artifacts
-.venv/
-__pycache__/
-*.pyc
-patch_backup*/
-analysis_results/
-knowledge_cards/
-missions/
-missions_deleted/
-ytis_state/
-projects/projects_index.json
-projects/*_YTIS_RESEARCH_READY/
-
-# YTIS transactional builder artifacts
-projects/_ytis_build_staging/
-projects/_ytis_failed_builds/
-projects/_ytis_build_backups/
-# YTIS local/generated artifacts
+*.py[cod]
+*$py.class
 .pytest_cache/
-.ruff_cache/
 .mypy_cache/
-projects/**/*.tmp_*.zip
-*.tmp_*.zip
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Frontend/tooling caches
+node_modules/
+playwright-report/
+
+# YTIS local runtime data
+analysis_results/
+knowledge_cards/
+missions/
+missions_deleted/
+ytis_state/
+projects/
+exports/
+logs/
+output/
+outputs/
+runs/
+webify_validation_kit_v1/
+
+# YTIS build, audit, proof, handoff, and patch artifacts
+patch_backup*/
+*_PROOF_*/
+*_AUDIT_*/
+*_HANDOFF_*/
+*_EXPORT*/
+*_PATCH*/
 YTIS_UI_AUDIT_*/
 YTIS_*_HANDOFF_*/
 YTIS_*_FINAL_ACTION_PACK_*/
 YTIS_*_IMPORT_PROOF_*/
-# YTIS local generated artifacts
+*.zip
+*.7z
+*.tar
+*.gz
+*.rar
+*.log
+*.tmp
+*.bak
+*.swp
+
+# Builder temporary artifacts
 .ytis_staging/
 .ytis_backups/
+*.tmp_*.zip
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+
+# YTIS local runtime and publication hygiene
+analysis_results/
+knowledge_cards/
+missions/
+missions_deleted/
+ytis_state/
+projects/
 exports/
+logs/
+patch_backup_*/
+*.zip
+*.log
+.venv/
+node_modules/
+__pycache__/
+.pytest_cache/
