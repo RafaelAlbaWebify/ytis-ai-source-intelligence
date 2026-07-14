@@ -72,6 +72,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/structured_json_provider_smoke.py
 
+      - name: Run research provider configuration proof
+        env:
+          PYTHONPATH: src
+        run: python tools/research_provider_configuration_smoke.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
