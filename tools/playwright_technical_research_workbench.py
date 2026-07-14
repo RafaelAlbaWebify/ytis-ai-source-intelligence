@@ -148,7 +148,7 @@ def main() -> int:
 
         report["checks"].update(
             {
-                "saved_investigation_exists": repository.exists("browser-proof-001"),
+                "saved_investigation_exists": "browser-proof-001" in repository.list_ids(),
                 "saved_aggregate_grounded": len(investigation.evidence) == 4 and len(investigation.findings) == 4,
                 "accepted_review_persisted": accepted == "accepted",
                 "rejected_review_persisted": rejected == "rejected",
