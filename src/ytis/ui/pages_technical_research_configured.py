@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from nicegui import ui
 
 from ytis.research import (
     ProviderConfigurationError,
     ResearchProviderSettings,
+    TechnicalResearchService,
     build_finding_provider,
 )
 from ytis.ui.layout import NAV_GROUPS, NAV_ITEMS, render_shell
@@ -30,8 +33,12 @@ def _register_navigation() -> None:
     )
 
 
-def register_configured_technical_research_page(*, app_version: str) -> None:
-    """Register the workbench with a fail-closed runtime configuration guard."""
+def register_configured_technical_research_page(
+    *,
+    app_version: str,
+    structured_generator: Callable[[str], str] | None = None,
+) -> None:
+    """Register the workbench with explicit provider construction and fail-closed guards."""
 
     _register_navigation()
     state = AppState(app_version=app_version)
@@ -40,7 +47,10 @@ def register_configured_technical_research_page(*, app_version: str) -> None:
     def technical_research_page() -> None:
         try:
             settings = ResearchProviderSettings.from_environment()
-            provider = build_finding_provider(settings)
+            provider = build_finding_provider(
+                settings,
+                structured_generator=structured_generator,
+            )
         except ProviderConfigurationError as exc:
             render_shell(state, _ROUTE)
             with ui.column().classes("ytis-page gap-4"):
@@ -61,14 +71,9 @@ def register_configured_technical_research_page(*, app_version: str) -> None:
                     ).classes("text-sm text-slate-400")
             return
 
-        # The existing workbench remains the proven deterministic implementation.
-        # Structured mode cannot reach this point without an explicitly injected generator.
-        if settings.mode != "deterministic":
-            raise ProviderConfigurationError(
-                "structured provider activation requires application-level generator injection"
-            )
-
-        render_technical_research(state)
-        ui.label(f"Active provider: {provider.provider_name}").classes(
-            "fixed bottom-3 right-4 text-xs text-slate-500"
-        ).props("data-testid=active-provider")
+        service = TechnicalResearchService(provider=provider)
+        render_technical_research(
+            state,
+            service=service,
+            provider_label=f"Active provider: {service.provider_name}",
+        )
