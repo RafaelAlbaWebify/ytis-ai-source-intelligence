@@ -18,6 +18,10 @@ from ytis.research.structured_provider import (
     StructuredProviderError,
 )
 from ytis.research.telemetry import ProviderExecutionEvent, ProviderExecutionObserver
+from ytis.research.telemetry_configuration import (
+    TelemetryConfigurationError,
+    build_provider_telemetry_observer,
+)
 from ytis.research.telemetry_store import JsonlProviderTelemetryStore, TelemetryRecordError
 
 __all__ = [
@@ -37,6 +41,8 @@ __all__ = [
     "StructuredJsonFindingProvider",
     "StructuredProviderError",
     "TechnicalResearchService",
+    "TelemetryConfigurationError",
     "TelemetryRecordError",
     "build_finding_provider",
+    "build_provider_telemetry_observer",
 ]
