@@ -87,6 +87,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/research_telemetry_store_smoke.py
 
+      - name: Run research telemetry opt-in configuration proof
+        env:
+          PYTHONPATH: src
+        run: python tools/research_telemetry_configuration_smoke.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
