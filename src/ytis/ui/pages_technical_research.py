@@ -222,11 +222,21 @@ def render_technical_research(
 
         def analyze() -> None:
             try:
+                sources = list(source_pack)
+                if not sources:
+                    sources = [
+                        SourceDocument(
+                            source_id="source-001",
+                            title=str(source_title.value or ""),
+                            content=str(source_text.value or ""),
+                            origin="technical-research-workbench",
+                        )
+                    ]
                 current["value"] = active_service.create_investigation(
                     investigation_id=str(investigation_id.value or ""),
                     title=str(title.value or ""),
                     question=str(question.value or ""),
-                    sources=list(source_pack),
+                    sources=sources,
                 )
                 render_findings()
                 ui.notify("Evidence-linked findings created from source pack", type="positive")
