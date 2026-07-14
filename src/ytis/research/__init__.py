@@ -23,6 +23,11 @@ from ytis.research.telemetry_configuration import (
     build_provider_telemetry_observer,
 )
 from ytis.research.telemetry_store import JsonlProviderTelemetryStore, TelemetryRecordError
+from ytis.research.telemetry_summary import (
+    ProviderTelemetryBreakdown,
+    ProviderTelemetrySummary,
+    summarize_provider_telemetry,
+)
 
 __all__ = [
     "DeterministicFindingProvider",
@@ -35,6 +40,8 @@ __all__ = [
     "ProviderConfigurationError",
     "ProviderExecutionEvent",
     "ProviderExecutionObserver",
+    "ProviderTelemetryBreakdown",
+    "ProviderTelemetrySummary",
     "ResearchProviderSettings",
     "ReviewDecision",
     "SourceDocument",
@@ -45,4 +52,5 @@ __all__ = [
     "TelemetryRecordError",
     "build_finding_provider",
     "build_provider_telemetry_observer",
+    "summarize_provider_telemetry",
 ]
