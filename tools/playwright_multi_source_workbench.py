@@ -128,6 +128,7 @@ def main() -> int:
             page.wait_for_timeout(1000)
 
             page.get_by_test_id("remove-source-2").click()
+            page.get_by_test_id("source-pack-item-2").wait_for(state="detached", timeout=10_000)
             report["checks"]["source_removed_before_reopen"] = page.locator("[data-testid^='source-pack-item-']").count() == 1
             page.get_by_test_id("saved-investigation").click()
             page.get_by_text("multi-source-proof-001", exact=True).last.click()
