@@ -57,6 +57,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/technical_research_smoke.py
 
+      - name: Run technical research persistence proof
+        env:
+          PYTHONPATH: src
+        run: python tools/technical_research_repository_smoke.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
