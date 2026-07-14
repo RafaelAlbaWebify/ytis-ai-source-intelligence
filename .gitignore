@@ -29,6 +29,7 @@ runs/
 webify_validation_kit_v1/
 
 # YTIS build, audit, proof, handoff, and patch artifacts
+artifacts/
 patch_backup*/
 *_PROOF_*/
 *_AUDIT_*/

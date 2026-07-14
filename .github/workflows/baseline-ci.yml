@@ -1,0 +1,62 @@
+name: Baseline CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - audit/github-ci-baseline
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.12']
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Upgrade packaging tools
+        run: python -m pip install --upgrade pip setuptools wheel
+
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run baseline audit
+        env:
+          PYTHONPATH: src
+        run: python tools/baseline_audit.py
+
+      - name: Characterize architecture
+        env:
+          PYTHONPATH: src
+        run: python tools/characterize_architecture.py
+
+      - name: Run deterministic source-pack smoke test
+        env:
+          PYTHONPATH: src
+        run: python tools/deterministic_source_pack_smoke.py
+
+      - name: Upload baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-${{ runner.os }}-py${{ matrix.python-version }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14

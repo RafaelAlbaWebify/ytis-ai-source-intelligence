@@ -57,6 +57,10 @@ A typical workflow is documented in `docs/sample-workflow.md`.
 6. Advance through the mission steps.
 7. Generate final action packs and knowledge cards.
 
+## Verification
+
+The current cross-platform CI baseline and its explicit limits are documented in `docs/ci-baseline.md`.
+
 ## Current status
 
 YTIS is a working local MVP. It is private-first and prepared for a private GitHub repository. It should not be treated as a mature public AI platform.
@@ -64,5 +68,3 @@ YTIS is a working local MVP. It is private-first and prepared for a private GitH
 ## Roadmap
 
 See `docs/roadmap.md`.
-
-
