@@ -56,13 +56,14 @@ def render_technical_research(
     active_service = service or TechnicalResearchService()
     reports_root = root / "reports"
     current: dict[str, Investigation | None] = {"value": None}
+    source_pack: list[SourceDocument] = []
 
     with ui.column().classes("ytis-page gap-4"):
         with ui.row().classes("w-full justify-between items-start gap-3 ytis-toolbar-row"):
             with ui.column().classes("gap-0"):
                 ui.label("Technical Research Workbench").classes("text-3xl font-bold")
                 ui.label(
-                    "Turn public-safe technical text into evidence-linked findings, review each claim, and export approved conclusions."
+                    "Turn public-safe technical sources into evidence-linked findings, review each claim, and export approved conclusions."
                 ).classes("text-sm text-slate-400")
             ui.badge(provider_label or active_service.provider_name, color="blue").props(
                 "outline data-testid=active-provider"
@@ -82,8 +83,11 @@ def render_technical_research(
                 value="What capabilities, constraints, risks, and recommendations are stated?",
             ).classes("w-full").props("data-testid=research-question")
 
+        source_pack_container = ui.column().classes("w-full gap-2")
+
         with ui.card().classes("ytis-card p-4 w-full"):
-            ui.label("2. Add a technical source").classes("text-xl font-bold")
+            ui.label("2. Build the source pack").classes("text-xl font-bold")
+            ui.label("Add one or more public-safe sources. IDs are assigned in insertion order.").classes("text-sm text-slate-400")
             source_title = ui.input("Source title", value="Public-safe technical note").classes("w-full").props("data-testid=source-title")
             source_text = ui.textarea(
                 "Source text",
@@ -93,7 +97,68 @@ def render_technical_research(
                     "A major risk is that unsupported claims could appear without evidence links. "
                     "The next step should add structured evidence-linked findings and reports."
                 ),
-            ).classes("w-full").props("rows=8 data-testid=source-text")
+            ).classes("w-full").props("rows=6 data-testid=source-text")
+            with ui.row().classes("gap-2"):
+                add_source_button = ui.button("Add source", icon="add", color="primary").props("data-testid=add-source")
+                ui.button(
+                    "Clear draft",
+                    icon="clear",
+                    on_click=lambda: (setattr(source_title, "value", ""), setattr(source_text, "value", "")),
+                ).props("outline data-testid=clear-source-draft")
+            ui.separator()
+            ui.label("Staged sources").classes("text-sm font-bold")
+            source_pack_container.move()
+
+        def renumber_sources() -> None:
+            for index, source in enumerate(list(source_pack), start=1):
+                source_pack[index - 1] = SourceDocument(
+                    source_id=f"source-{index:03d}",
+                    title=source.title,
+                    content=source.content,
+                    source_type=source.source_type,
+                    origin=source.origin,
+                )
+
+        def render_source_pack() -> None:
+            source_pack_container.clear()
+            with source_pack_container:
+                if not source_pack:
+                    ui.label("No sources staged.").classes("text-sm text-slate-500").props("data-testid=source-pack-empty")
+                    return
+                for index, source in enumerate(source_pack, start=1):
+                    with ui.card().classes("ytis-card p-3 w-full").props(f"data-testid=source-pack-item-{index}"):
+                        with ui.row().classes("w-full justify-between items-start gap-3"):
+                            with ui.column().classes("gap-0 flex-1"):
+                                ui.label(f"{source.source_id} · {source.title}").classes("font-bold").props(
+                                    f"data-testid=source-pack-title-{index}"
+                                )
+                                ui.label(source.content).classes("text-sm text-slate-400 line-clamp-2")
+                            def remove_source(*, position: int = index - 1) -> None:
+                                source_pack.pop(position)
+                                renumber_sources()
+                                render_source_pack()
+                            ui.button("Remove", icon="delete", on_click=remove_source).props(
+                                f"flat dense color=negative data-testid=remove-source-{index}"
+                            )
+
+        def add_source() -> None:
+            try:
+                source = SourceDocument(
+                    source_id=f"source-{len(source_pack) + 1:03d}",
+                    title=str(source_title.value or ""),
+                    content=str(source_text.value or ""),
+                    origin="technical-research-workbench",
+                )
+                source_pack.append(source)
+                render_source_pack()
+                source_title.value = ""
+                source_text.value = ""
+                ui.notify(f"Added {source.source_id}", type="positive")
+            except Exception as exc:
+                ui.notify(str(exc), type="negative")
+
+        add_source_button.on_click(add_source)
+        render_source_pack()
 
         status = ui.label("No investigation loaded.").classes("text-sm text-slate-400")
         findings_container = ui.column().classes("w-full gap-3")
@@ -109,8 +174,8 @@ def render_technical_research(
                 return
             accepted, rejected, pending = review_counts(investigation)
             status.set_text(
-                f"{len(investigation.evidence)} evidence units · {len(investigation.findings)} findings · "
-                f"{accepted} accepted · {rejected} rejected · {pending} pending"
+                f"{len(investigation.sources)} sources · {len(investigation.evidence)} evidence units · "
+                f"{len(investigation.findings)} findings · {accepted} accepted · {rejected} rejected · {pending} pending"
             )
 
         def render_findings() -> None:
@@ -140,7 +205,6 @@ def render_technical_research(
                                     active_service.review_finding(active, finding_id=finding_id, status=review_status)
                                     badge.set_text(review_status)
                                     update_status()
-
                                 ui.button("Accept", icon="check", on_click=lambda _e, fn=set_review: fn("accepted")).props(
                                     f"outline dense data-testid=accept-{index}"
                                 )
@@ -151,28 +215,31 @@ def render_technical_research(
                             for evidence_id in finding.evidence_ids:
                                 evidence = evidence_by_id[evidence_id]
                                 ui.label(
-                                    f"{evidence.evidence_id} · {evidence.source_id} · chars "
-                                    f"{evidence.start_offset}-{evidence.end_offset}"
+                                    f"{evidence.evidence_id} · {evidence.source_id} · chars {evidence.start_offset}-{evidence.end_offset}"
                                 ).classes("text-xs text-blue-300")
                                 ui.label(evidence.text).classes("text-sm text-slate-300")
             update_status()
 
         def analyze() -> None:
             try:
-                source = SourceDocument(
-                    source_id="source-001",
-                    title=str(source_title.value or ""),
-                    content=str(source_text.value or ""),
-                    origin="technical-research-workbench",
-                )
+                sources = list(source_pack)
+                if not sources:
+                    sources = [
+                        SourceDocument(
+                            source_id="source-001",
+                            title=str(source_title.value or ""),
+                            content=str(source_text.value or ""),
+                            origin="technical-research-workbench",
+                        )
+                    ]
                 current["value"] = active_service.create_investigation(
                     investigation_id=str(investigation_id.value or ""),
                     title=str(title.value or ""),
                     question=str(question.value or ""),
-                    sources=[source],
+                    sources=sources,
                 )
                 render_findings()
-                ui.notify("Evidence-linked findings created", type="positive")
+                ui.notify("Evidence-linked findings created from source pack", type="positive")
             except Exception as exc:
                 ui.notify(str(exc), type="negative")
 
@@ -213,8 +280,11 @@ def render_technical_research(
                 investigation_id.value = investigation.investigation_id
                 title.value = investigation.title
                 question.value = investigation.question
-                source_title.value = investigation.sources[0].title if investigation.sources else ""
-                source_text.value = investigation.sources[0].content if investigation.sources else ""
+                source_pack.clear()
+                source_pack.extend(investigation.sources)
+                render_source_pack()
+                source_title.value = ""
+                source_text.value = ""
                 render_findings()
                 ui.notify(f"Reopened {selected}", type="positive")
             except Exception as exc:
@@ -223,7 +293,7 @@ def render_technical_research(
         with ui.card().classes("ytis-card p-4 w-full"):
             ui.label("3. Analyze and review").classes("text-xl font-bold")
             with ui.row().classes("gap-2 ytis-toolbar-row"):
-                ui.button("Analyze source", icon="science", on_click=analyze, color="primary").props("data-testid=analyze-source")
+                ui.button("Analyze source pack", icon="science", on_click=analyze, color="primary").props("data-testid=analyze-source")
                 ui.button("Save investigation", icon="save", on_click=save).props("outline data-testid=save-investigation")
                 ui.button("Export approved report", icon="download", on_click=export).props("outline data-testid=export-report")
 
