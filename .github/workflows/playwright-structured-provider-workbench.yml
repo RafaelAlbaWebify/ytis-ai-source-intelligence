@@ -1,0 +1,41 @@
+name: Playwright Structured Provider Workbench
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  structured-provider-workbench:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt playwright
+
+      - name: Install Chromium and operating-system dependencies
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run structured provider workbench proof
+        env:
+          PYTHONPATH: src
+        run: python tools/playwright_structured_provider_workbench.py
+
+      - name: Upload structured provider evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-structured-provider-workbench
+          path: artifacts/structured-provider-workbench/
+          if-no-files-found: warn
+          retention-days: 14
