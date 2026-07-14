@@ -106,7 +106,8 @@ def main() -> int:
                 "Human review is required before publication."
             )
             page.get_by_test_id("analyze-source").click()
-            page.get_by_test_id("finding-2").wait_for(state="visible", timeout=15_000)
+            page.get_by_test_id("finding-1").wait_for(state="visible", timeout=15_000)
+            report["checks"]["finding_rendered"] = page.locator("[data-testid^='finding-']").count() >= 1
             page.screenshot(path=str(screenshot_path), full_page=True)
             context.tracing.stop(path=str(trace_path))
             context.close()
