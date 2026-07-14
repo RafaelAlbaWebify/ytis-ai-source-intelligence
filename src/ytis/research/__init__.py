@@ -17,6 +17,7 @@ from ytis.research.structured_provider import (
     StructuredJsonFindingProvider,
     StructuredProviderError,
 )
+from ytis.research.telemetry import ProviderExecutionEvent, ProviderExecutionObserver
 
 __all__ = [
     "DeterministicFindingProvider",
@@ -26,6 +27,8 @@ __all__ = [
     "Investigation",
     "JsonInvestigationRepository",
     "ProviderConfigurationError",
+    "ProviderExecutionEvent",
+    "ProviderExecutionObserver",
     "ResearchProviderSettings",
     "ReviewDecision",
     "SourceDocument",
