@@ -109,13 +109,13 @@ def main() -> int:
             page.goto(BASE_URL.rstrip("/") + "/technical-research", wait_until="networkidle", timeout=30_000)
             report["checks"]["page_loaded"] = "Technical Research Workbench" in page.locator("body").inner_text()
 
-            page.get_by_test_id("investigation-id").locator("input").fill("browser-proof-001")
-            page.get_by_test_id("investigation-title").locator("input").fill("Browser proof investigation")
-            page.get_by_test_id("research-question").locator("input").fill(
+            page.get_by_test_id("investigation-id").fill("browser-proof-001")
+            page.get_by_test_id("investigation-title").fill("Browser proof investigation")
+            page.get_by_test_id("research-question").fill(
                 "What technical capabilities, constraints, risks, and recommendations are stated?"
             )
-            page.get_by_test_id("source-title").locator("input").fill("Browser fixture technical note")
-            page.get_by_test_id("source-text").locator("textarea").fill(
+            page.get_by_test_id("source-title").fill("Browser fixture technical note")
+            page.get_by_test_id("source-text").fill(
                 "The platform supports local transcript cleaning and validated ZIP packaging. "
                 "The current workflow requires human review before findings are published. "
                 "A major risk is that unsupported claims could appear without evidence links. "
