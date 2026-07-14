@@ -10,10 +10,11 @@ from ytis.research import (
     TechnicalResearchService,
     TelemetryConfigurationError,
     build_finding_provider,
-    build_provider_telemetry_observer,
+    build_provider_telemetry_store,
 )
 from ytis.ui.layout import NAV_GROUPS, NAV_ITEMS, render_shell
 from ytis.ui.pages_technical_research import _storage_root, render_technical_research
+from ytis.ui.research_telemetry_panel import render_provider_telemetry_panel
 from ytis.ui.state import AppState
 
 _ROUTE = "/technical-research"
@@ -53,7 +54,7 @@ def register_configured_technical_research_page(
                 settings,
                 structured_generator=structured_generator,
             )
-            telemetry_observer = build_provider_telemetry_observer(storage_root=_storage_root())
+            telemetry_store = build_provider_telemetry_store(storage_root=_storage_root())
         except (ProviderConfigurationError, TelemetryConfigurationError) as exc:
             render_shell(state, _ROUTE)
             with ui.column().classes("ytis-page gap-4"):
@@ -76,14 +77,16 @@ def register_configured_technical_research_page(
 
         service = TechnicalResearchService(
             provider=provider,
-            execution_observer=telemetry_observer,
+            execution_observer=telemetry_store.append if telemetry_store is not None else None,
         )
         render_technical_research(
             state,
             service=service,
             provider_label=f"Active provider: {service.provider_name}",
         )
-        telemetry_label = "Local telemetry enabled" if telemetry_observer is not None else "Telemetry off"
+        if telemetry_store is not None:
+            render_provider_telemetry_panel(telemetry_store)
+        telemetry_label = "Local telemetry enabled" if telemetry_store is not None else "Telemetry off"
         ui.label(telemetry_label).classes("fixed bottom-8 right-4 text-xs text-slate-500").props(
             "data-testid=telemetry-status"
         )
