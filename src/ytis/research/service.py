@@ -1,20 +1,40 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from time import perf_counter_ns
 
 from ytis.research.extractor import extract_evidence
 from ytis.research.models import Investigation, ReviewDecision, SourceDocument
 from ytis.research.providers import DeterministicFindingProvider, FindingProvider
 from ytis.research.reporting import write_reports
+from ytis.research.telemetry import ProviderExecutionEvent, ProviderExecutionObserver
 
 
 class TechnicalResearchService:
-    def __init__(self, provider: FindingProvider | None = None) -> None:
+    def __init__(
+        self,
+        provider: FindingProvider | None = None,
+        *,
+        execution_observer: ProviderExecutionObserver | None = None,
+        clock_ns: Callable[[], int] = perf_counter_ns,
+    ) -> None:
         self.provider: FindingProvider = provider or DeterministicFindingProvider()
+        self._execution_observer = execution_observer
+        self._clock_ns = clock_ns
 
     @property
     def provider_name(self) -> str:
         return self.provider.provider_name
+
+    def _emit_execution_event(self, event: ProviderExecutionEvent) -> None:
+        if self._execution_observer is None:
+            return
+        try:
+            self._execution_observer(event)
+        except Exception:
+            # Telemetry is strictly best-effort and must never change product behavior.
+            return
 
     def create_investigation(
         self,
@@ -38,11 +58,38 @@ class TechnicalResearchService:
         )
         for source in sources:
             investigation.evidence.extend(extract_evidence(source))
-        investigation.findings = self.provider.generate_findings(
-            question=question,
-            evidence=investigation.evidence,
+
+        started_ns = self._clock_ns()
+        try:
+            investigation.findings = self.provider.generate_findings(
+                question=question,
+                evidence=investigation.evidence,
+            )
+            self.validate_grounding(investigation)
+        except Exception as exc:
+            duration_ms = max(0.0, (self._clock_ns() - started_ns) / 1_000_000)
+            self._emit_execution_event(
+                ProviderExecutionEvent(
+                    provider_name=self.provider_name,
+                    outcome="failure",
+                    duration_ms=duration_ms,
+                    evidence_count=len(investigation.evidence),
+                    finding_count=len(investigation.findings),
+                    error_type=type(exc).__name__,
+                )
+            )
+            raise
+
+        duration_ms = max(0.0, (self._clock_ns() - started_ns) / 1_000_000)
+        self._emit_execution_event(
+            ProviderExecutionEvent(
+                provider_name=self.provider_name,
+                outcome="success",
+                duration_ms=duration_ms,
+                evidence_count=len(investigation.evidence),
+                finding_count=len(investigation.findings),
+            )
         )
-        self.validate_grounding(investigation)
         return investigation
 
     def review_finding(
