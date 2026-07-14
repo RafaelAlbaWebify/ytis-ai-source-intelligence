@@ -1,3 +1,8 @@
+from ytis.research.configuration import (
+    ProviderConfigurationError,
+    ResearchProviderSettings,
+    build_finding_provider,
+)
 from ytis.research.models import (
     EvidenceUnit,
     Finding,
@@ -20,9 +25,12 @@ __all__ = [
     "FindingProvider",
     "Investigation",
     "JsonInvestigationRepository",
+    "ProviderConfigurationError",
+    "ResearchProviderSettings",
     "ReviewDecision",
     "SourceDocument",
     "StructuredJsonFindingProvider",
     "StructuredProviderError",
     "TechnicalResearchService",
+    "build_finding_provider",
 ]
