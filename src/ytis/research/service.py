@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ytis.research.extractor import classify_evidence, extract_evidence
+from ytis.research.extractor import extract_evidence
 from ytis.research.models import Investigation, ReviewDecision, SourceDocument
+from ytis.research.providers import DeterministicFindingProvider, FindingProvider
 from ytis.research.reporting import write_reports
 
 
 class TechnicalResearchService:
+    def __init__(self, provider: FindingProvider | None = None) -> None:
+        self.provider: FindingProvider = provider or DeterministicFindingProvider()
+
+    @property
+    def provider_name(self) -> str:
+        return self.provider.provider_name
+
     def create_investigation(
         self,
         *,
@@ -30,7 +38,10 @@ class TechnicalResearchService:
         )
         for source in sources:
             investigation.evidence.extend(extract_evidence(source))
-        investigation.findings = classify_evidence(investigation.evidence)
+        investigation.findings = self.provider.generate_findings(
+            question=question,
+            evidence=investigation.evidence,
+        )
         self.validate_grounding(investigation)
         return investigation
 
@@ -61,6 +72,9 @@ class TechnicalResearchService:
         evidence_ids = {item.evidence_id for item in investigation.evidence}
         if len(evidence_ids) != len(investigation.evidence):
             raise ValueError("evidence IDs must be unique")
+        finding_ids = {item.finding_id for item in investigation.findings}
+        if len(finding_ids) != len(investigation.findings):
+            raise ValueError("finding IDs must be unique")
         for finding in investigation.findings:
             missing = set(finding.evidence_ids) - evidence_ids
             if missing:
