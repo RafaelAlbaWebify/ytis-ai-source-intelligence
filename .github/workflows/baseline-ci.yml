@@ -42,11 +42,16 @@ jobs:
           PYTHONPATH: src
         run: python tools/baseline_audit.py
 
+      - name: Characterize architecture
+        env:
+          PYTHONPATH: src
+        run: python tools/characterize_architecture.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: baseline-${{ runner.os }}-py${{ matrix.python-version }}
-          path: artifacts/baseline/
+          path: artifacts/
           if-no-files-found: warn
           retention-days: 14
