@@ -1,0 +1,44 @@
+name: Playwright Navigation Interaction
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  navigation-interaction:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Install Chromium and operating-system dependencies
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run visible navigation interaction test
+        env:
+          PYTHONPATH: src
+        run: python tools/playwright_navigation_interaction.py
+
+      - name: Upload navigation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-navigation-interaction
+          path: artifacts/playwright-navigation/
+          if-no-files-found: warn
+          retention-days: 14
