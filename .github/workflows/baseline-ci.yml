@@ -47,6 +47,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/characterize_architecture.py
 
+      - name: Run deterministic source-pack smoke test
+        env:
+          PYTHONPATH: src
+        run: python tools/deterministic_source_pack_smoke.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
