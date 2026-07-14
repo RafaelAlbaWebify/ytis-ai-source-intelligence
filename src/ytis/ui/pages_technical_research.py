@@ -44,11 +44,16 @@ def register_technical_research_page(*, app_version: str) -> None:
         render_technical_research(state)
 
 
-def render_technical_research(state: AppState) -> None:
+def render_technical_research(
+    state: AppState,
+    *,
+    service: TechnicalResearchService | None = None,
+    provider_label: str | None = None,
+) -> None:
     render_shell(state, _ROUTE)
     root = _storage_root()
     repository = JsonInvestigationRepository(root / "investigations")
-    service = TechnicalResearchService()
+    active_service = service or TechnicalResearchService()
     reports_root = root / "reports"
     current: dict[str, Investigation | None] = {"value": None}
 
@@ -59,7 +64,9 @@ def render_technical_research(state: AppState) -> None:
                 ui.label(
                     "Turn public-safe technical text into evidence-linked findings, review each claim, and export approved conclusions."
                 ).classes("text-sm text-slate-400")
-            ui.badge("Deterministic provider", color="blue").props("outline")
+            ui.badge(provider_label or active_service.provider_name, color="blue").props(
+                "outline data-testid=active-provider"
+            )
 
         with ui.card().classes("ytis-card p-4 w-full"):
             ui.label("1. Define the investigation").classes("text-xl font-bold")
@@ -130,7 +137,7 @@ def render_technical_research(state: AppState) -> None:
                                     active = current["value"]
                                     if active is None:
                                         return
-                                    service.review_finding(active, finding_id=finding_id, status=review_status)
+                                    active_service.review_finding(active, finding_id=finding_id, status=review_status)
                                     badge.set_text(review_status)
                                     update_status()
 
@@ -158,7 +165,7 @@ def render_technical_research(state: AppState) -> None:
                     content=str(source_text.value or ""),
                     origin="technical-research-workbench",
                 )
-                current["value"] = service.create_investigation(
+                current["value"] = active_service.create_investigation(
                     investigation_id=str(investigation_id.value or ""),
                     title=str(title.value or ""),
                     question=str(question.value or ""),
@@ -190,7 +197,7 @@ def render_technical_research(state: AppState) -> None:
                 return
             try:
                 output = reports_root / investigation.investigation_id
-                markdown_path, json_path = service.generate_reports(investigation, output)
+                markdown_path, json_path = active_service.generate_reports(investigation, output)
                 ui.notify(f"Exported {markdown_path.name} and {json_path.name}", type="positive")
             except Exception as exc:
                 ui.notify(str(exc), type="negative")
