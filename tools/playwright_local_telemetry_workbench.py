@@ -85,7 +85,7 @@ def main() -> int:
         server_errors: list[str] = []
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
-            context = browser.new_context(viewport={"width": 1440, "height": 1100})
+            context = browser.new_context(viewport={"width": 1440, "height": 1200})
             context.tracing.start(screenshots=True, snapshots=True, sources=True)
             page = context.new_page()
             page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
@@ -100,6 +100,10 @@ def main() -> int:
             report["checks"]["telemetry_enabled_visible"] = (
                 page.get_by_test_id("telemetry-status").inner_text() == "Local telemetry enabled"
             )
+            report["checks"]["telemetry_panel_visible"] = page.get_by_test_id("telemetry-panel").count() == 1
+            report["checks"]["panel_starts_empty"] = page.get_by_test_id("telemetry-empty").count() == 1
+            report["checks"]["initial_total_zero"] = page.get_by_test_id("telemetry-total").inner_text() == "0"
+
             page.get_by_test_id("research-question").fill(SENSITIVE_QUESTION)
             page.get_by_test_id("source-text").fill(
                 f"{SENSITIVE_SOURCE}. The platform supports local evidence analysis. "
@@ -108,6 +112,20 @@ def main() -> int:
             page.get_by_test_id("analyze-source").click()
             page.get_by_test_id("finding-1").wait_for(state="visible", timeout=15_000)
             report["checks"]["finding_rendered"] = page.locator("[data-testid^='finding-']").count() >= 1
+
+            page.get_by_test_id("refresh-telemetry").click()
+            page.get_by_test_id("telemetry-total").wait_for(state="visible", timeout=10_000)
+            report["checks"]["summary_total_updated"] = page.get_by_test_id("telemetry-total").inner_text() == "1"
+            report["checks"]["summary_success_rate_updated"] = (
+                page.get_by_test_id("telemetry-success-rate").inner_text() == "100.0%"
+            )
+            report["checks"]["provider_row_visible"] = (
+                "deterministic-rules" in page.get_by_test_id("telemetry-provider-row").inner_text()
+            )
+            report["checks"]["recent_row_visible"] = (
+                "success" in page.get_by_test_id("telemetry-recent-row").inner_text()
+            )
+
             page.screenshot(path=str(screenshot_path), full_page=True)
             context.tracing.stop(path=str(trace_path))
             context.close()

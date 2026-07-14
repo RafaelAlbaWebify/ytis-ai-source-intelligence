@@ -21,6 +21,7 @@ from ytis.research.telemetry import ProviderExecutionEvent, ProviderExecutionObs
 from ytis.research.telemetry_configuration import (
     TelemetryConfigurationError,
     build_provider_telemetry_observer,
+    build_provider_telemetry_store,
 )
 from ytis.research.telemetry_store import JsonlProviderTelemetryStore, TelemetryRecordError
 from ytis.research.telemetry_summary import (
@@ -52,5 +53,6 @@ __all__ = [
     "TelemetryRecordError",
     "build_finding_provider",
     "build_provider_telemetry_observer",
+    "build_provider_telemetry_store",
     "summarize_provider_telemetry",
 ]

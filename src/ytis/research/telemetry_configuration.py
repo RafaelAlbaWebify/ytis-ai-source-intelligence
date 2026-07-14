@@ -12,12 +12,12 @@ class TelemetryConfigurationError(ValueError):
     """Raised when provider telemetry configuration is invalid."""
 
 
-def build_provider_telemetry_observer(
+def build_provider_telemetry_store(
     *,
     storage_root: Path,
     environment: Mapping[str, str] | None = None,
-) -> ProviderExecutionObserver | None:
-    """Build an explicitly enabled local observer; telemetry is off by default."""
+) -> JsonlProviderTelemetryStore | None:
+    """Build the explicitly enabled local telemetry store; telemetry is off by default."""
 
     values = os.environ if environment is None else environment
     mode = values.get("YTIS_RESEARCH_TELEMETRY", "off").strip().lower()
@@ -27,6 +27,18 @@ def build_provider_telemetry_observer(
         raise TelemetryConfigurationError(
             "YTIS_RESEARCH_TELEMETRY must be 'off' or 'local-jsonl'"
         )
+    return JsonlProviderTelemetryStore(storage_root / "telemetry" / "provider-executions.jsonl")
 
-    store = JsonlProviderTelemetryStore(storage_root / "telemetry" / "provider-executions.jsonl")
-    return store.append
+
+def build_provider_telemetry_observer(
+    *,
+    storage_root: Path,
+    environment: Mapping[str, str] | None = None,
+) -> ProviderExecutionObserver | None:
+    """Build an explicitly enabled local observer; telemetry is off by default."""
+
+    store = build_provider_telemetry_store(
+        storage_root=storage_root,
+        environment=environment,
+    )
+    return store.append if store is not None else None
