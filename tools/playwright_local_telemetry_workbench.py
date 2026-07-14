@@ -102,7 +102,7 @@ def main() -> int:
             )
             report["checks"]["telemetry_panel_visible"] = page.get_by_test_id("telemetry-panel").count() == 1
             report["checks"]["panel_starts_empty"] = page.get_by_test_id("telemetry-empty").count() == 1
-            report["checks"]["initial_total_zero"] = page.get_by_test_id("telemetry-total").inner_text() == "0"
+            report["checks"]["initial_total_zero"] = page.get_by_test_id("telemetry-total").inner_text().strip() == "0"
 
             page.get_by_test_id("research-question").fill(SENSITIVE_QUESTION)
             page.get_by_test_id("source-text").fill(
@@ -115,9 +115,9 @@ def main() -> int:
 
             page.get_by_test_id("refresh-telemetry").click()
             page.get_by_test_id("telemetry-total").wait_for(state="visible", timeout=10_000)
-            report["checks"]["summary_total_updated"] = page.get_by_test_id("telemetry-total").inner_text() == "1"
+            report["checks"]["summary_total_updated"] = page.get_by_test_id("telemetry-total").inner_text().strip() == "1"
             report["checks"]["summary_success_rate_updated"] = (
-                page.get_by_test_id("telemetry-success-rate").inner_text() == "100.0%"
+                page.get_by_test_id("telemetry-success-rate").inner_text().strip() == "100.0%"
             )
             report["checks"]["provider_row_visible"] = (
                 "deterministic-rules" in page.get_by_test_id("telemetry-provider-row").inner_text()
