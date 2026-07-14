@@ -62,6 +62,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/technical_research_repository_smoke.py
 
+      - name: Run research provider contract proof
+        env:
+          PYTHONPATH: src
+        run: python tools/research_provider_contract_smoke.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
