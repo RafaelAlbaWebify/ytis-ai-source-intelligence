@@ -133,7 +133,12 @@ def main() -> int:
                     entry["actual_path"] = page.url.replace(BASE_URL.rstrip("/"), "") or "/"
                     entry["active_count"] = page.locator(".ytis-nav-expanded .ytis-nav-active").count()
                     active_text = page.locator(".ytis-nav-expanded .ytis-nav-active").all_inner_texts()
-                    entry["active_labels"] = [text.strip() for text in active_text]
+                    entry["active_labels"] = [
+                        line.strip()
+                        for text in active_text
+                        for line in text.splitlines()
+                        if line.strip()
+                    ]
                     entry["console_errors"] = global_console_errors[before_console:]
                     entry["page_errors"] = global_page_errors[before_page:]
                     entry["server_errors"] = global_server_errors[before_server:]
