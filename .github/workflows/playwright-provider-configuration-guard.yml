@@ -1,0 +1,44 @@
+name: Playwright Provider Configuration Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provider-configuration-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Install Chromium and operating-system dependencies
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run provider configuration guard proof
+        env:
+          PYTHONPATH: src
+        run: python tools/playwright_provider_configuration_guard.py
+
+      - name: Upload provider guard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-provider-configuration-guard
+          path: artifacts/provider-configuration-guard/
+          if-no-files-found: warn
+          retention-days: 14
