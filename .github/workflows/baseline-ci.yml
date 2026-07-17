@@ -97,6 +97,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/research_telemetry_summary_smoke.py
 
+      - name: Run reviewed report template proof
+        env:
+          PYTHONPATH: src
+        run: python tools/reviewed_report_templates_smoke.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
