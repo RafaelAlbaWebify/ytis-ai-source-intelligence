@@ -117,6 +117,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/duplicate_source_detection_smoke.py
 
+      - name: Run source pack editing and reordering proof
+        env:
+          PYTHONPATH: src
+        run: python tools/source_pack_editing_smoke.py
+
       - name: Run combined roadmap integration proof
         env:
           PYTHONPATH: src
