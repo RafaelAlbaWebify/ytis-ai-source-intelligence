@@ -24,28 +24,28 @@
       "source_id": "source-001",
       "text": "The workbench supports local evidence-linked analysis and JSON persistence.",
       "start_offset": 0,
-      "end_offset": 74
+      "end_offset": 75
     },
     {
       "evidence_id": "source-001:e002",
       "source_id": "source-001",
       "text": "Human review is required before findings become reusable outputs.",
-      "start_offset": 75,
-      "end_offset": 140
+      "start_offset": 76,
+      "end_offset": 141
     },
     {
       "evidence_id": "source-002:e001",
       "source_id": "source-002",
       "text": "A major risk is presenting generated claims without provenance.",
       "start_offset": 0,
-      "end_offset": 62
+      "end_offset": 63
     },
     {
       "evidence_id": "source-002:e002",
       "source_id": "source-002",
       "text": "The next step should retain source-qualified evidence in cards and reports.",
-      "start_offset": 63,
-      "end_offset": 137
+      "start_offset": 64,
+      "end_offset": 139
     }
   ],
   "findings": [
