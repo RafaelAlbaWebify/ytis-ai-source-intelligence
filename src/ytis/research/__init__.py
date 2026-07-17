@@ -4,6 +4,11 @@ from ytis.research.configuration import (
     build_finding_provider,
 )
 from ytis.research.insight_cards import InsightCard, JsonInsightCardRepository, create_insight_card
+from ytis.research.local_import import (
+    DEFAULT_MAX_SOURCE_BYTES,
+    SUPPORTED_LOCAL_SOURCE_SUFFIXES,
+    import_local_source,
+)
 from ytis.research.models import (
     SOURCE_TYPES,
     EvidenceUnit,
@@ -47,6 +52,7 @@ from ytis.research.telemetry_summary import (
 )
 
 __all__ = [
+    "DEFAULT_MAX_SOURCE_BYTES",
     "DeterministicFindingProvider",
     "DuplicateSourceGroup",
     "EvidenceUnit",
@@ -68,6 +74,7 @@ __all__ = [
     "ReviewDecision",
     "ReviewedReport",
     "SOURCE_TYPES",
+    "SUPPORTED_LOCAL_SOURCE_SUFFIXES",
     "SourceDocument",
     "StructuredJsonFindingProvider",
     "StructuredProviderError",
@@ -80,6 +87,7 @@ __all__ = [
     "create_insight_card",
     "edit_source",
     "find_duplicate_sources",
+    "import_local_source",
     "move_source",
     "normalize_source_content",
     "render_reviewed_report",
