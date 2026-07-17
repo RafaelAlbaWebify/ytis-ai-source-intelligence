@@ -14,6 +14,14 @@ if str(SRC) not in sys.path:
 
 from ytis.research import InsightCard, JsonInvestigationRepository, TechnicalResearchService
 
+REPORT_FILES = (
+    "source-credibility.md",
+    "business-model.md",
+    "technical-lessons.md",
+    "learning-roadmap.md",
+    "opportunity-analysis.md",
+)
+
 
 def main() -> int:
     if OUT.exists():
@@ -36,7 +44,8 @@ def main() -> int:
 
     card_payload = json.loads((EXAMPLE / "insight-card.json").read_text(encoding="utf-8"))
     card = InsightCard.from_dict(card_payload)
-    report_text = (EXAMPLE / "technical-lessons.md").read_text(encoding="utf-8")
+    reports = {name: (EXAMPLE / name).read_text(encoding="utf-8") for name in REPORT_FILES}
+    evidence_ids = [evidence.evidence_id for evidence in investigation.evidence]
     source_files_match = (
         (EXAMPLE / "source-architecture.md").read_text(encoding="utf-8").strip()
         == investigation.sources[0].content
@@ -58,10 +67,18 @@ def main() -> int:
             and card.review_status == "accepted"
             and card.evidence_ids == ("source-002:e002",)
         ),
-        "report_contains_all_evidence_ids": all(
-            evidence.evidence_id in report_text for evidence in investigation.evidence
+        "all_five_reports_committed": set(reports) == set(REPORT_FILES),
+        "every_report_contains_all_evidence_ids": all(
+            all(evidence_id in report_text for evidence_id in evidence_ids)
+            for report_text in reports.values()
         ),
-        "report_has_review_boundary": "Only human-accepted findings are included." in report_text,
+        "every_report_has_review_boundary": all(
+            "Only human-accepted findings are included." in report_text
+            for report_text in reports.values()
+        ),
+        "source_credibility_avoids_autonomous_score": (
+            "requires human assessment" in reports["source-credibility.md"]
+        ),
         "readme_documents_safety_boundary": "Safety boundary" in (EXAMPLE / "README.md").read_text(encoding="utf-8"),
     }
     result = {
@@ -71,6 +88,7 @@ def main() -> int:
         "source_ids": [source.source_id for source in investigation.sources],
         "finding_ids": [finding.finding_id for finding in investigation.findings],
         "card_id": card.card_id,
+        "report_files": list(REPORT_FILES),
     }
     (OUT / "report.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     (OUT / "report.md").write_text(
