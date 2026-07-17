@@ -107,6 +107,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/research_insight_cards_smoke.py
 
+      - name: Run related insight card advisory proof
+        env:
+          PYTHONPATH: src
+        run: python tools/related_insight_cards_smoke.py
+
       - name: Run reviewed report template proof
         env:
           PYTHONPATH: src
