@@ -24,7 +24,7 @@ def main() -> int:
             source_id="source-001",
             title="Architecture article",
             content="The platform supports local evidence packaging.",
-            source_type="article-notes",
+            source_type="ARTICLE-NOTES",
             origin="https://example.test/article",
         ),
         SourceDocument(
@@ -35,6 +35,11 @@ def main() -> int:
             origin="role-fixture-2026",
         ),
     ]
+    legacy_source = SourceDocument(
+        source_id="legacy-source",
+        title="Legacy source",
+        content="Legacy constructors retain safe defaults.",
+    )
     investigation = service.create_investigation(
         investigation_id="typed-source-proof",
         title="Typed source proof",
@@ -57,6 +62,7 @@ def main() -> int:
         }.issubset(set(SOURCE_TYPES)),
         "source_types_normalized": [source.source_type for source in investigation.sources]
         == ["article-notes", "job-description"],
+        "legacy_defaults_preserved": legacy_source.source_type == "text" and legacy_source.origin == "fixture",
         "origins_preserved": [source.origin for source in investigation.sources]
         == ["https://example.test/article", "role-fixture-2026"],
         "unsupported_type_rejected": expect_error(
