@@ -28,6 +28,7 @@ from ytis.research.source_duplicates import (
     normalize_source_content,
     source_fingerprint,
 )
+from ytis.research.source_pack import edit_source, move_source
 from ytis.research.structured_provider import (
     StructuredJsonFindingProvider,
     StructuredProviderError,
@@ -77,7 +78,9 @@ __all__ = [
     "build_provider_telemetry_observer",
     "build_provider_telemetry_store",
     "create_insight_card",
+    "edit_source",
     "find_duplicate_sources",
+    "move_source",
     "normalize_source_content",
     "render_reviewed_report",
     "source_fingerprint",
