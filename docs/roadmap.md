@@ -29,7 +29,7 @@ Status: complete.
 
 ## M2 - Multi-source ingestion
 
-Status: substantially implemented; integration validation pending.
+Status: core implementation complete; executable integration validation pending.
 
 Completed:
 
@@ -40,16 +40,19 @@ Completed:
 - Descriptive source origin/reference metadata.
 - Advisory exact duplicate-source detection.
 - Non-destructive duplicate warnings in the workbench.
+- Safe local UTF-8 text and Markdown import at the domain boundary.
+- Stable source editing and deterministic reordering.
+- Workbench edit, move and remove controls that preserve source identity.
+- Browser proof for stable IDs through edit, reorder, removal and new-source creation.
 
 Remaining:
 
-- Local document import.
-- Source editing and reordering.
+- Browser-facing file chooser/upload wiring for the completed local importer.
 - Optional metadata capture for public references without automatic crawling.
 
 ## M3 - Evidence and insight cards
 
-Status: substantially implemented; integration validation pending.
+Status: core implementation complete; executable integration validation pending.
 
 Completed:
 
@@ -63,15 +66,15 @@ Completed:
 - Atomic local card persistence and duplicate-save protection.
 - Workbench controls for accepted-finding card creation.
 - Browser proof that pending findings cannot create cards.
+- Committed representative reusable-card example.
 
 Remaining:
 
-- Related-card handling beyond exact duplicate IDs.
-- Representative reusable-card examples.
+- Advisory related-card handling beyond exact duplicate IDs.
 
 ## M4 - Report generation
 
-Status: substantially implemented; integration validation pending.
+Status: core implementation complete; executable integration validation pending.
 
 Completed:
 
@@ -86,14 +89,15 @@ Completed:
 - Opportunity-analysis template.
 - Workbench template selector and reviewed-template export controls.
 - Browser proof that pending findings remain excluded from reviewed reports.
+- Committed representative technical-lessons report.
 
 Remaining:
 
-- Representative portfolio examples for every template.
+- Additional representative examples for the other four templates.
 
 ## M5 - Validation and UI polish
 
-Status: substantially implemented; integration validation pending.
+Status: substantially implemented; executable integration validation pending.
 
 Completed:
 
@@ -103,12 +107,13 @@ Completed:
 - Retained screenshots, traces, logs and structured evidence artifacts.
 - Focused `/demo` route and dedicated Playwright journey.
 - Combined roadmap integration proof.
-- Reusable-output workbench browser journey covering duplicates, cards, and reviewed reports.
+- Reusable-output workbench browser journey covering duplicates, cards and reviewed reports.
+- Source editing and ordering browser journey.
+- Committed portfolio investigation validated in the cross-platform baseline.
 
 Remaining:
 
 - Navigation and onboarding simplification.
-- Representative sample investigations.
 - Final portfolio screenshots and publication review.
 
 ## Non-goals
