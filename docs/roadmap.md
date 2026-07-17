@@ -29,7 +29,7 @@ Status: complete.
 
 ## M2 - Multi-source ingestion
 
-Status: core implementation complete; executable integration validation pending.
+Status: product implementation complete; executable integration validation pending.
 
 Completed:
 
@@ -44,15 +44,17 @@ Completed:
 - Stable source editing and deterministic reordering.
 - Workbench edit, move and remove controls that preserve source identity.
 - Browser proof for stable IDs through edit, reorder, removal and new-source creation.
+- Version-stable Local Source Import page that creates a saved investigation for reopening in the workbench.
+- Browser proof for local Markdown import, deterministic analysis and saved investigation persistence.
 
 Remaining:
 
-- Browser-facing file chooser/upload wiring for the completed local importer.
 - Optional enriched metadata capture for public references without automatic crawling.
+- A native browser file chooser may be added after the minimum NiceGUI major version is pinned; the current path-based control avoids depending on incompatible NiceGUI 2.x/3.x upload APIs.
 
 ## M3 - Evidence and insight cards
 
-Status: core implementation complete; executable integration validation pending.
+Status: product implementation complete; executable integration validation pending.
 
 Completed:
 
@@ -69,14 +71,16 @@ Completed:
 - Committed representative reusable-card example.
 - Advisory related-card detection using exact normalized claims and shared evidence IDs.
 - Non-destructive related-card repository listing and deterministic relation proof.
+- Insight Card Library page showing persisted cards and exact relationship advisories.
+- Browser proof for persistent card presentation and normalized-claim relationships.
 
 Remaining:
 
-- Optional persistent related-card presentation in the workbench.
+- No core insight-card capability remains; future work is presentation polish.
 
 ## M4 - Report generation
 
-Status: core implementation complete; executable integration validation pending.
+Status: product implementation complete; executable integration validation pending.
 
 Completed:
 
@@ -112,6 +116,7 @@ Completed:
 - Combined roadmap integration proof.
 - Reusable-output workbench browser journey covering duplicates, cards and reviewed reports.
 - Source editing and ordering browser journey.
+- Local-import and card-library browser journey.
 - Committed portfolio investigation validated in the cross-platform baseline.
 
 Remaining:
