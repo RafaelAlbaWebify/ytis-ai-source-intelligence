@@ -22,6 +22,7 @@ Current working capabilities include:
 - human review of evidence-linked findings;
 - local investigation persistence and reopen;
 - reusable accepted-finding insight cards with explicit actions;
+- advisory related-card detection using exact claims and shared evidence;
 - accepted-only Markdown and complete JSON exports;
 - five reviewed report templates;
 - advisory duplicate-source detection;
@@ -68,7 +69,7 @@ See `docs/public-demo.md` for the expected result and automated browser evidence
 
 ## Inspectable portfolio example
 
-`examples/portfolio-investigation/` contains committed source files, a complete reviewed investigation, a reusable insight card and a technical-lessons report. The Windows/Linux baseline validates its grounding, source offsets and cross-artifact traceability.
+`examples/portfolio-investigation/` contains committed source files, a complete reviewed investigation, a reusable insight card and representative outputs for all five report templates. The Windows/Linux baseline validates grounding, exact source offsets, card linkage, report evidence coverage and the human-review boundary.
 
 ## Full workflow
 
@@ -77,6 +78,8 @@ A typical end-to-end workflow is documented in `docs/sample-workflow.md`.
 ## Verification
 
 The current cross-platform CI baseline and its explicit limits are documented in `docs/ci-baseline.md`. Browser workflows retain screenshots, traces, server logs and structured JSON check reports.
+
+The final merge and publication gate is documented in `docs/publication-review.md`.
 
 ## Current status
 
