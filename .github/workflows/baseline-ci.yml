@@ -102,6 +102,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/research_source_types_report_smoke.py
 
+      - name: Run public reference metadata proof
+        env:
+          PYTHONPATH: src
+        run: python tools/public_reference_metadata_smoke.py
+
       - name: Run evidence-linked insight card proof
         env:
           PYTHONPATH: src
