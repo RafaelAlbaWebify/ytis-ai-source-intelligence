@@ -7,9 +7,11 @@ This document defines the evidence required before the consolidated roadmap bran
 1. `README.md` — product purpose, workflow, safety boundaries and verification summary.
 2. `/demo` — smallest deterministic browser journey.
 3. `/technical-research` — complete source-to-reviewed-output workbench.
-4. `examples/portfolio-investigation/` — inspectable source, investigation, card and five report templates.
-5. `docs/roadmap.md` — completed capabilities and remaining polish.
-6. `docs/safety-boundaries.md` — non-goals and human-review constraints.
+4. `/local-source-import` — version-stable local text/Markdown ingestion into a saved investigation.
+5. `/insight-cards` — persisted reusable cards and advisory exact relationships.
+6. `examples/portfolio-investigation/` — inspectable source, investigation, card and five report templates.
+7. `docs/roadmap.md` — completed capabilities and remaining polish.
+8. `docs/safety-boundaries.md` — non-goals and human-review constraints.
 
 ## Required merge evidence
 
@@ -22,6 +24,7 @@ The pull request must not merge until all jobs execute and pass:
 - multi-source workbench;
 - source-pack editing workbench;
 - reusable outputs workbench;
+- local source import and insight card library;
 - structured provider workbench;
 - provider configuration guard;
 - local telemetry workbench;
@@ -51,6 +54,7 @@ Before publication, confirm:
 - cards and reviewed reports use accepted grounded findings only;
 - source credibility reports do not invent an autonomous score;
 - duplicate and related-source/card handling remains advisory;
+- local-path import remains limited to explicit user-selected UTF-8 text and Markdown files;
 - telemetry contains metadata only and remains opt-in/local;
 - no network source fetching is enabled by default.
 
@@ -63,8 +67,9 @@ Confirm that a reviewer can understand, without repository archaeology:
 - exact provenance through source IDs, evidence IDs and offsets;
 - local persistence boundaries;
 - the focused demo versus the full workbench;
+- the local import and card-library routes;
 - the current limitations and non-goals.
 
 ## Current release blocker
 
-At the time this review was added, GitHub Actions jobs were completing before checkout with no executable steps. PR #23 must remain draft and unmerged until the full matrix actually runs and passes.
+GitHub Actions jobs are still completing before checkout with no executable steps. PR #23 must remain draft and unmerged until the full matrix actually runs and passes.
