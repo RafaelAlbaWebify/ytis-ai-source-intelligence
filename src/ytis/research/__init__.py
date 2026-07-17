@@ -25,6 +25,7 @@ from ytis.research.models import (
     SourceDocument,
 )
 from ytis.research.providers import DeterministicFindingProvider, FindingProvider
+from ytis.research.public_reference import PublicReferenceMetadata, capture_public_reference
 from ytis.research.report_templates import (
     REPORT_TEMPLATES,
     ReportTemplate,
@@ -75,6 +76,7 @@ __all__ = [
     "ProviderExecutionObserver",
     "ProviderTelemetryBreakdown",
     "ProviderTelemetrySummary",
+    "PublicReferenceMetadata",
     "REPORT_TEMPLATES",
     "RelatedCardPair",
     "ReportTemplate",
@@ -92,6 +94,7 @@ __all__ = [
     "build_finding_provider",
     "build_provider_telemetry_observer",
     "build_provider_telemetry_store",
+    "capture_public_reference",
     "create_insight_card",
     "edit_source",
     "find_duplicate_sources",
