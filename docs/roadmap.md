@@ -48,7 +48,7 @@ Completed:
 Remaining:
 
 - Browser-facing file chooser/upload wiring for the completed local importer.
-- Optional metadata capture for public references without automatic crawling.
+- Optional enriched metadata capture for public references without automatic crawling.
 
 ## M3 - Evidence and insight cards
 
@@ -67,10 +67,12 @@ Completed:
 - Workbench controls for accepted-finding card creation.
 - Browser proof that pending findings cannot create cards.
 - Committed representative reusable-card example.
+- Advisory related-card detection using exact normalized claims and shared evidence IDs.
+- Non-destructive related-card repository listing and deterministic relation proof.
 
 Remaining:
 
-- Advisory related-card handling beyond exact duplicate IDs.
+- Optional persistent related-card presentation in the workbench.
 
 ## M4 - Report generation
 
@@ -89,11 +91,12 @@ Completed:
 - Opportunity-analysis template.
 - Workbench template selector and reviewed-template export controls.
 - Browser proof that pending findings remain excluded from reviewed reports.
-- Committed representative technical-lessons report.
+- Committed representative examples for all five templates.
+- Cross-platform validation that every example retains all evidence IDs and the human-review boundary.
 
 Remaining:
 
-- Additional representative examples for the other four templates.
+- No core report capability remains; future work is presentation polish.
 
 ## M5 - Validation and UI polish
 
@@ -114,7 +117,8 @@ Completed:
 Remaining:
 
 - Navigation and onboarding simplification.
-- Final portfolio screenshots and publication review.
+- Final portfolio screenshots after browser workflows execute successfully.
+- Final publication review after the full CI matrix is green.
 
 ## Non-goals
 
