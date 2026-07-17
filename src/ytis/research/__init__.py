@@ -3,6 +3,11 @@ from ytis.research.configuration import (
     ResearchProviderSettings,
     build_finding_provider,
 )
+from ytis.research.insight_cards import (
+    InsightCard,
+    JsonInsightCardRepository,
+    create_insight_card,
+)
 from ytis.research.models import (
     EvidenceUnit,
     Finding,
@@ -35,7 +40,9 @@ __all__ = [
     "EvidenceUnit",
     "Finding",
     "FindingProvider",
+    "InsightCard",
     "Investigation",
+    "JsonInsightCardRepository",
     "JsonInvestigationRepository",
     "JsonlProviderTelemetryStore",
     "ProviderConfigurationError",
@@ -54,5 +61,6 @@ __all__ = [
     "build_finding_provider",
     "build_provider_telemetry_observer",
     "build_provider_telemetry_store",
+    "create_insight_card",
     "summarize_provider_telemetry",
 ]
