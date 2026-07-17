@@ -117,6 +117,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/duplicate_source_detection_smoke.py
 
+      - name: Run combined roadmap integration proof
+        env:
+          PYTHONPATH: src
+        run: python tools/roadmap_integration_smoke.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
