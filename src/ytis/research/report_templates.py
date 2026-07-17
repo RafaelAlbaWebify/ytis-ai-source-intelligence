@@ -124,7 +124,6 @@ def render_reviewed_report(investigation: Investigation, template: str) -> Revie
                     "",
                 ]
             )
-        body.extend(["## Accepted claims", "", *_finding_lines(accepted)])
         title = "Source credibility and provenance"
     elif template == "business-model":
         body = [
@@ -180,6 +179,7 @@ def render_reviewed_report(investigation: Investigation, template: str) -> Revie
         ]
         title = "Opportunity analysis"
 
+    body.extend(["## Accepted evidence register", "", *_finding_lines(accepted)])
     markdown = "\n".join(header + body).rstrip() + "\n"
     return ReviewedReport(
         template=template,  # type: ignore[arg-type]
