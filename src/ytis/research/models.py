@@ -6,6 +6,16 @@ from typing import Literal
 FindingCategory = Literal["capability", "constraint", "risk", "recommendation"]
 ReviewStatus = Literal["pending", "accepted", "rejected"]
 
+SOURCE_TYPES: tuple[str, ...] = (
+    "text",
+    "technical-note",
+    "pasted-text",
+    "article-notes",
+    "document-notes",
+    "job-description",
+    "transcript",
+)
+
 
 def _required(value: str, field_name: str) -> str:
     text = str(value or "").strip()
@@ -26,6 +36,11 @@ class SourceDocument:
         object.__setattr__(self, "source_id", _required(self.source_id, "source_id"))
         object.__setattr__(self, "title", _required(self.title, "title"))
         object.__setattr__(self, "content", _required(self.content, "content"))
+        source_type = _required(self.source_type, "source_type").lower()
+        if source_type not in SOURCE_TYPES:
+            raise ValueError(f"unsupported source type: {source_type}")
+        object.__setattr__(self, "source_type", source_type)
+        object.__setattr__(self, "origin", _required(self.origin, "origin"))
 
 
 @dataclass(frozen=True)
