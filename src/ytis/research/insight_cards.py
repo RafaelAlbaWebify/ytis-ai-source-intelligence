@@ -9,7 +9,9 @@ from ytis.research.models import Investigation
 
 
 def _required(value: str, field_name: str) -> str:
-    text = str(value or "").strip()
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+    text = value.strip()
     if not text:
         raise ValueError(f"{field_name} is required")
     return text
@@ -32,10 +34,14 @@ class InsightCard:
         object.__setattr__(self, "finding_id", _required(self.finding_id, "finding_id"))
         object.__setattr__(self, "claim", _required(self.claim, "claim"))
         object.__setattr__(self, "action", _required(self.action, "action"))
-        if not self.evidence_ids:
+        if not isinstance(self.evidence_ids, tuple) or not self.evidence_ids:
             raise ValueError("insight card must cite at least one evidence unit")
+        if not all(isinstance(item, str) and item.strip() for item in self.evidence_ids):
+            raise ValueError("insight card evidence IDs must be non-empty strings")
         if len(self.evidence_ids) != len(set(self.evidence_ids)):
             raise ValueError("insight card evidence IDs must be unique")
+        if isinstance(self.confidence, bool) or not isinstance(self.confidence, (int, float)):
+            raise ValueError("confidence must be numeric")
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("confidence must be between 0 and 1")
         if self.review_status != "accepted":
@@ -60,6 +66,9 @@ class InsightCard:
         }
         if set(payload) != expected:
             raise ValueError("insight card payload has unexpected fields")
+        string_fields = ("card_id", "investigation_id", "finding_id", "claim", "action", "review_status")
+        if any(not isinstance(payload[field], str) for field in string_fields):
+            raise ValueError("insight card string fields must be strings")
         evidence_ids = payload["evidence_ids"]
         if not isinstance(evidence_ids, list) or not all(isinstance(item, str) for item in evidence_ids):
             raise ValueError("evidence_ids must be a list of strings")
