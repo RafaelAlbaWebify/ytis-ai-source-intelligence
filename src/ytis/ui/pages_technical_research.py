@@ -14,6 +14,15 @@ from ytis.ui.state import AppState
 
 _ROUTE = "/technical-research"
 _NAV_ITEM = ("Technical Research", _ROUTE, "science")
+_SOURCE_TYPE_OPTIONS = {
+    "technical-note": "Technical note",
+    "pasted-text": "Pasted text",
+    "article-notes": "Article notes",
+    "document-notes": "Document notes",
+    "job-description": "Job description",
+    "transcript": "Transcript",
+    "text": "Generic text",
+}
 
 
 def _storage_root() -> Path:
@@ -88,7 +97,17 @@ def render_technical_research(
         with ui.card().classes("ytis-card p-4 w-full"):
             ui.label("2. Build the source pack").classes("text-xl font-bold")
             ui.label("Add one or more public-safe sources. IDs are assigned in insertion order.").classes("text-sm text-slate-400")
-            source_title = ui.input("Source title", value="Public-safe technical note").classes("w-full").props("data-testid=source-title")
+            with ui.grid(columns=2).classes("w-full gap-3"):
+                source_title = ui.input("Source title", value="Public-safe technical note").classes("w-full").props("data-testid=source-title")
+                source_type = ui.select(
+                    _SOURCE_TYPE_OPTIONS,
+                    value="technical-note",
+                    label="Source type",
+                ).classes("w-full").props("data-testid=source-type")
+            source_origin = ui.input(
+                "Origin or reference",
+                value="manual-workbench-entry",
+            ).classes("w-full").props("data-testid=source-origin")
             source_text = ui.textarea(
                 "Source text",
                 value=(
@@ -98,13 +117,16 @@ def render_technical_research(
                     "The next step should add structured evidence-linked findings and reports."
                 ),
             ).classes("w-full").props("rows=6 data-testid=source-text")
+
+            def clear_draft() -> None:
+                source_title.value = ""
+                source_type.value = "technical-note"
+                source_origin.value = "manual-workbench-entry"
+                source_text.value = ""
+
             with ui.row().classes("gap-2"):
                 add_source_button = ui.button("Add source", icon="add", color="primary").props("data-testid=add-source")
-                ui.button(
-                    "Clear draft",
-                    icon="clear",
-                    on_click=lambda: (setattr(source_title, "value", ""), setattr(source_text, "value", "")),
-                ).props("outline data-testid=clear-source-draft")
+                ui.button("Clear draft", icon="clear", on_click=clear_draft).props("outline data-testid=clear-source-draft")
             ui.separator()
             ui.label("Staged sources").classes("text-sm font-bold")
             source_pack_container.move()
@@ -128,31 +150,41 @@ def render_technical_research(
                 for index, source in enumerate(source_pack, start=1):
                     with ui.card().classes("ytis-card p-3 w-full").props(f"data-testid=source-pack-item-{index}"):
                         with ui.row().classes("w-full justify-between items-start gap-3"):
-                            with ui.column().classes("gap-0 flex-1"):
+                            with ui.column().classes("gap-1 flex-1"):
                                 ui.label(f"{source.source_id} · {source.title}").classes("font-bold").props(
                                     f"data-testid=source-pack-title-{index}"
                                 )
+                                with ui.row().classes("gap-2"):
+                                    ui.badge(source.source_type).props(f"outline data-testid=source-pack-type-{index}")
+                                    ui.label(source.origin).classes("text-xs text-slate-500").props(
+                                        f"data-testid=source-pack-origin-{index}"
+                                    )
                                 ui.label(source.content).classes("text-sm text-slate-400 line-clamp-2")
+
                             def remove_source(*, position: int = index - 1) -> None:
                                 source_pack.pop(position)
                                 renumber_sources()
                                 render_source_pack()
+
                             ui.button("Remove", icon="delete", on_click=remove_source).props(
                                 f"flat dense color=negative data-testid=remove-source-{index}"
                             )
 
+        def draft_source(source_id: str) -> SourceDocument:
+            return SourceDocument(
+                source_id=source_id,
+                title=str(source_title.value or ""),
+                content=str(source_text.value or ""),
+                source_type=str(source_type.value or "technical-note"),
+                origin=str(source_origin.value or ""),
+            )
+
         def add_source() -> None:
             try:
-                source = SourceDocument(
-                    source_id=f"source-{len(source_pack) + 1:03d}",
-                    title=str(source_title.value or ""),
-                    content=str(source_text.value or ""),
-                    origin="technical-research-workbench",
-                )
+                source = draft_source(f"source-{len(source_pack) + 1:03d}")
                 source_pack.append(source)
                 render_source_pack()
-                source_title.value = ""
-                source_text.value = ""
+                clear_draft()
                 ui.notify(f"Added {source.source_id}", type="positive")
             except Exception as exc:
                 ui.notify(str(exc), type="negative")
@@ -205,6 +237,7 @@ def render_technical_research(
                                     active_service.review_finding(active, finding_id=finding_id, status=review_status)
                                     badge.set_text(review_status)
                                     update_status()
+
                                 ui.button("Accept", icon="check", on_click=lambda _e, fn=set_review: fn("accepted")).props(
                                     f"outline dense data-testid=accept-{index}"
                                 )
@@ -222,16 +255,7 @@ def render_technical_research(
 
         def analyze() -> None:
             try:
-                sources = list(source_pack)
-                if not sources:
-                    sources = [
-                        SourceDocument(
-                            source_id="source-001",
-                            title=str(source_title.value or ""),
-                            content=str(source_text.value or ""),
-                            origin="technical-research-workbench",
-                        )
-                    ]
+                sources = list(source_pack) or [draft_source("source-001")]
                 current["value"] = active_service.create_investigation(
                     investigation_id=str(investigation_id.value or ""),
                     title=str(title.value or ""),
@@ -283,8 +307,7 @@ def render_technical_research(
                 source_pack.clear()
                 source_pack.extend(investigation.sources)
                 render_source_pack()
-                source_title.value = ""
-                source_text.value = ""
+                clear_draft()
                 render_findings()
                 ui.notify(f"Reopened {selected}", type="positive")
             except Exception as exc:
