@@ -4,6 +4,7 @@ from ytis.research.configuration import (
     build_finding_provider,
 )
 from ytis.research.models import (
+    SOURCE_TYPES,
     EvidenceUnit,
     Finding,
     Investigation,
@@ -45,6 +46,7 @@ __all__ = [
     "ProviderTelemetrySummary",
     "ResearchProviderSettings",
     "ReviewDecision",
+    "SOURCE_TYPES",
     "SourceDocument",
     "StructuredJsonFindingProvider",
     "StructuredProviderError",
