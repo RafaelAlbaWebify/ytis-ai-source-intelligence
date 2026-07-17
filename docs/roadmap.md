@@ -37,7 +37,7 @@ Completed:
 - Stable source IDs and provenance-qualified evidence.
 - Save and reopen of complete source packs.
 - Public-safe pasted technical text.
-- First-class technical-note, pasted-text, article-note, document-note, job-description and transcript categories.
+- First-class technical-note, pasted-text, article-notes, document-notes, job-description and transcript categories.
 - Descriptive source origin/reference metadata.
 
 Remaining:
