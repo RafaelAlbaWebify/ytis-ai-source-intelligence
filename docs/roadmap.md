@@ -38,6 +38,7 @@ Completed:
 - Save and reopen of complete source packs.
 - First-class technical-note, pasted-text, article-notes, document-notes, job-description and transcript categories.
 - Descriptive source origin/reference metadata.
+- Deterministic no-network public-reference URL metadata capture.
 - Advisory exact duplicate-source detection.
 - Non-destructive duplicate warnings in the workbench.
 - Safe local UTF-8 text and Markdown import at the domain boundary.
@@ -49,8 +50,7 @@ Completed:
 
 Remaining:
 
-- Optional enriched metadata capture for public references without automatic crawling.
-- A native browser file chooser may be added after the minimum NiceGUI major version is pinned; the current path-based control avoids depending on incompatible NiceGUI 2.x/3.x upload APIs.
+- A native browser file chooser may be considered only after the minimum NiceGUI major version is pinned. The current path-based control intentionally avoids incompatible NiceGUI 2.x/3.x upload APIs.
 
 ## M3 - Evidence and insight cards
 
@@ -104,26 +104,28 @@ Remaining:
 
 ## M5 - Validation and UI polish
 
-Status: substantially implemented; executable integration validation pending.
+Status: implementation complete; executable integration validation pending.
 
 Completed:
 
-- Windows and Linux baseline CI.
+- Windows and Linux baseline CI definition.
 - Route and visible-navigation Playwright coverage.
 - Deterministic, structured-provider, telemetry and multi-source browser journeys.
 - Retained screenshots, traces, logs and structured evidence artifacts.
 - Focused `/demo` route and dedicated Playwright journey.
+- Focused `/start` onboarding route and dedicated Playwright journey.
 - Combined roadmap integration proof.
 - Reusable-output workbench browser journey covering duplicates, cards and reviewed reports.
 - Source editing and ordering browser journey.
 - Local-import and card-library browser journey.
 - Committed portfolio investigation validated in the cross-platform baseline.
+- Publication-readiness contract and explicit merge gate.
 
 Remaining:
 
-- Navigation and onboarding simplification.
-- Final portfolio screenshots after browser workflows execute successfully.
-- Final publication review after the full CI matrix is green.
+- Execute the complete CI matrix successfully.
+- Capture final portfolio screenshots from the same commit that passes and is merged.
+- Perform the final publication review after the full CI matrix is green.
 
 ## Non-goals
 
