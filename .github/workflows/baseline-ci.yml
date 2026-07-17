@@ -132,6 +132,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/roadmap_integration_smoke.py
 
+      - name: Validate committed portfolio example
+        env:
+          PYTHONPATH: src
+        run: python tools/portfolio_example_smoke.py
+
       - name: Upload baseline evidence
         if: always()
         uses: actions/upload-artifact@v4
