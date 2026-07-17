@@ -16,7 +16,10 @@ from ytis.research import (
     SourceDocument,
     TechnicalResearchService,
     create_insight_card,
+    edit_source,
     find_duplicate_sources,
+    import_local_source,
+    move_source,
     render_reviewed_report,
 )
 
@@ -25,18 +28,24 @@ def main() -> int:
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
+    import_root = OUT / "imports"
+    import_root.mkdir()
+    local_path = import_root / "architecture.md"
+    local_path.write_text(
+        "The platform supports evidence-linked local reports. "
+        "The workflow requires human review before reuse.",
+        encoding="utf-8",
+    )
 
-    sources = [
-        SourceDocument(
-            source_id="source-001",
-            title="Architecture article",
-            source_type="article-notes",
-            origin="https://example.test/architecture",
-            content=(
-                "The platform supports evidence-linked local reports. "
-                "The workflow requires human review before reuse."
-            ),
-        ),
+    imported = import_local_source(
+        local_path,
+        source_id="source-001",
+        title="Architecture article",
+        source_type="article-notes",
+        allowed_root=import_root,
+    )
+    initial_sources = (
+        imported,
         SourceDocument(
             source_id="source-002",
             title="Architecture article copy",
@@ -49,23 +58,30 @@ def main() -> int:
         ),
         SourceDocument(
             source_id="source-003",
-            title="Role requirement",
+            title="Role requirement draft",
             source_type="job-description",
-            origin="role-fixture",
+            origin="role-fixture-draft",
             content=(
                 "A major risk is losing provenance during manual consolidation. "
                 "The next step should preserve source-qualified evidence in reusable outputs."
             ),
         ),
-    ]
+    )
+    edited_sources = edit_source(
+        initial_sources,
+        source_id="source-003",
+        title="Role requirement",
+        origin="role-fixture",
+    )
+    sources = move_source(edited_sources, source_id="source-003", target_index=1)
 
-    duplicate_groups = find_duplicate_sources(sources)
+    duplicate_groups = find_duplicate_sources(list(sources))
     service = TechnicalResearchService()
     investigation = service.create_investigation(
         investigation_id="roadmap-integration",
         title="Roadmap integration proof",
         question="What capabilities, constraints, risks, and recommendations are stated?",
-        sources=sources,
+        sources=list(sources),
     )
     accepted = investigation.findings[0]
     service.review_finding(investigation, finding_id=accepted.finding_id, status="accepted")
@@ -82,10 +98,19 @@ def main() -> int:
     report_path.write_text(reviewed_report.markdown, encoding="utf-8")
 
     checks = {
+        "local_source_imported": imported.content.startswith("The platform supports"),
+        "local_origin_preserved": imported.origin == str(local_path.resolve()),
+        "source_edit_preserved_stable_id": edited_sources[2].source_id == "source-003",
+        "source_edit_updated_metadata": (
+            edited_sources[2].title == "Role requirement"
+            and edited_sources[2].origin == "role-fixture"
+        ),
+        "source_reorder_exact": [source.source_id for source in sources]
+        == ["source-001", "source-003", "source-002"],
         "typed_sources_preserved": [source.source_type for source in investigation.sources]
-        == ["article-notes", "document-notes", "job-description"],
+        == ["article-notes", "job-description", "document-notes"],
         "origins_preserved": [source.origin for source in investigation.sources]
-        == ["https://example.test/architecture", "local-copy", "role-fixture"],
+        == [str(local_path.resolve()), "role-fixture", "local-copy"],
         "duplicate_advisory_exact": [group.source_ids for group in duplicate_groups]
         == [("source-001", "source-002")],
         "duplicate_detection_non_destructive": len(investigation.sources) == 3,
@@ -102,6 +127,7 @@ def main() -> int:
     result = {
         "ok": all(checks.values()),
         "checks": checks,
+        "source_order": [source.source_id for source in sources],
         "duplicate_groups": [
             {"fingerprint": group.fingerprint, "source_ids": list(group.source_ids)}
             for group in duplicate_groups
