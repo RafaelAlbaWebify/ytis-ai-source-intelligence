@@ -5,14 +5,16 @@ from ytis.ui.layout import register_pages
 from ytis.ui.pages_demo import register_demo_page
 from ytis.ui.pages_insight_cards import register_insight_cards_page
 from ytis.ui.pages_local_source_import import register_local_source_import_page
+from ytis.ui.pages_start_here import register_start_here_page
 from ytis.ui.pages_technical_research_configured import (
     register_configured_technical_research_page,
 )
 
-APP_VERSION = "v0.11.0"
+APP_VERSION = "v0.12.0"
 
 
 def main() -> None:
+    register_start_here_page(app_version=APP_VERSION)
     register_configured_technical_research_page(app_version=APP_VERSION)
     register_local_source_import_page(app_version=APP_VERSION)
     register_insight_cards_page(app_version=APP_VERSION)
