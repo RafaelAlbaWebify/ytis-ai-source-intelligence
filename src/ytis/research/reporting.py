@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 from ytis.research.models import Investigation
@@ -8,14 +9,27 @@ from ytis.research.models import Investigation
 
 def render_markdown(investigation: Investigation) -> str:
     evidence_by_id = {item.evidence_id: item for item in investigation.evidence}
+    evidence_counts = Counter(item.source_id for item in investigation.evidence)
     lines = [
         f"# {investigation.title}",
         "",
         f"**Research question:** {investigation.question}",
         "",
-        "## Findings",
+        "## Source register",
         "",
     ]
+    for source in investigation.sources:
+        lines.extend(
+            [
+                f"### {source.source_id} · {source.title}",
+                "",
+                f"- Type: `{source.source_type}`",
+                f"- Origin: {source.origin}",
+                f"- Evidence units: {evidence_counts[source.source_id]}",
+                "",
+            ]
+        )
+    lines.extend(["## Findings", ""])
     accepted = [
         finding
         for finding in investigation.findings
