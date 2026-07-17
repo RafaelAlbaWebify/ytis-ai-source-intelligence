@@ -45,9 +45,21 @@ YTIS is for public-safe research and learning workflows. It does not access rest
 
 See `docs/safety-boundaries.md` for the full boundary model.
 
-## Demo workflow
+## Focused public demo
 
-A typical workflow is documented in `docs/sample-workflow.md`.
+Run the app and open `/demo` for the smallest complete YTIS journey:
+
+```bash
+python -m ytis.app
+```
+
+The demo uses one built-in public-safe source and produces four evidence-linked findings with exact provenance and pending human-review status. It requires no uploads, credentials, network access, provider configuration, telemetry or persistence.
+
+See `docs/public-demo.md` for the expected result and automated browser evidence.
+
+## Full workflow
+
+A typical end-to-end workflow is documented in `docs/sample-workflow.md`.
 
 1. Select a public-safe source.
 2. Build or inspect a source pack.
