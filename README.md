@@ -16,13 +16,14 @@ Current working capabilities include:
 
 - typed multi-source investigation packs;
 - stable source IDs, editing, ordering and provenance-qualified evidence;
-- safe local UTF-8 text and Markdown import at the domain boundary;
+- safe local UTF-8 text and Markdown import;
+- a version-stable Local Source Import page that creates saved investigations;
 - transcript collection, cleaning and source-pack generation;
 - deterministic and replaceable structured finding providers;
 - human review of evidence-linked findings;
 - local investigation persistence and reopen;
 - reusable accepted-finding insight cards with explicit actions;
-- advisory related-card detection using exact claims and shared evidence;
+- an Insight Card Library with advisory exact relationships;
 - accepted-only Markdown and complete JSON exports;
 - five reviewed report templates;
 - advisory duplicate-source detection;
@@ -45,6 +46,21 @@ source pack
 
 Every reusable card and reviewed report is derived only from accepted findings that retain exact source-qualified evidence IDs.
 
+## Run locally
+
+```bash
+python -m ytis.app
+```
+
+Useful routes:
+
+- `/technical-research` — full source-pack, review, card and report workbench;
+- `/local-source-import` — import a local `.txt`, `.md` or `.markdown` path, analyze it and save the investigation;
+- `/insight-cards` — inspect persisted cards and advisory exact relationships;
+- `/demo` — smallest deterministic public-safe journey.
+
+The path-based local import control intentionally avoids relying on incompatible NiceGUI 2.x and 3.x upload APIs while the repository still permits NiceGUI 2.x. The hardened importer remains responsible for extension, UTF-8, size, path and symlink validation.
+
 ## How ChatGPT fits
 
 YTIS is not the reasoning model. ChatGPT or another explicitly configured provider can support synthesis, while YTIS controls source preparation, structured boundaries, evidence provenance, review status, persistence and reusable outputs. The deterministic offline provider remains the default and CI fixture.
@@ -57,13 +73,7 @@ See `docs/safety-boundaries.md` for the full boundary model.
 
 ## Focused public demo
 
-Run the app and open `/demo` for the smallest complete YTIS journey:
-
-```bash
-python -m ytis.app
-```
-
-The demo uses one built-in public-safe source and produces four evidence-linked findings with exact provenance and pending human-review status. It requires no uploads, credentials, network access, provider configuration, telemetry or persistence.
+The `/demo` route uses one built-in public-safe source and produces four evidence-linked findings with exact provenance and pending human-review status. It requires no uploads, credentials, network access, provider configuration, telemetry or persistence.
 
 See `docs/public-demo.md` for the expected result and automated browser evidence.
 
