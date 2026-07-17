@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +12,7 @@ REQUIRED_FILES = (
     "docs/safety-boundaries.md",
     "docs/public-demo.md",
     "docs/publication-review.md",
+    "src/ytis/ui/pages_start_here.py",
     "examples/portfolio-investigation/README.md",
     "examples/portfolio-investigation/investigation.json",
     "examples/portfolio-investigation/insight-card.json",
@@ -27,6 +27,7 @@ REQUIRED_WORKFLOWS = (
     ".github/workflows/baseline-ci.yml",
     ".github/workflows/playwright-route-smoke.yml",
     ".github/workflows/playwright-navigation-interaction.yml",
+    ".github/workflows/playwright-start-here.yml",
     ".github/workflows/playwright-technical-research.yml",
     ".github/workflows/playwright-multi-source-workbench.yml",
     ".github/workflows/playwright-source-pack-editing.yml",
@@ -47,12 +48,7 @@ def main() -> int:
     review = (ROOT / "docs" / "publication-review.md").read_text(encoding="utf-8")
     safety = (ROOT / "docs" / "safety-boundaries.md").read_text(encoding="utf-8")
 
-    forbidden_tracked_names = {
-        ".env",
-        "credentials.json",
-        "secrets.json",
-        "token.json",
-    }
+    forbidden_tracked_names = {".env", "credentials.json", "secrets.json", "token.json"}
     forbidden_present = [
         str(path.relative_to(ROOT))
         for path in ROOT.rglob("*")
@@ -63,6 +59,7 @@ def main() -> int:
         "required_portfolio_files_present": not missing_files,
         "required_workflows_present": not missing_workflows,
         "readme_links_portfolio_example": "examples/portfolio-investigation/" in readme,
+        "readme_links_start_here": "/start" in readme,
         "readme_states_human_review": "Human review is always required" in readme,
         "publication_review_blocks_steps_none": "steps: None" in review,
         "publication_review_requires_same_commit_screenshots": "same commit that is merged" in review,
@@ -77,12 +74,6 @@ def main() -> int:
         "forbidden_present": forbidden_present,
     }
     (OUT / "report.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
-    (OUT / "report.md").write_text(
-        "# Publication readiness proof\n\n"
-        + "\n".join(f"- {'PASS' if value else 'FAIL'} `{name}`" for name, value in checks.items())
-        + "\n",
-        encoding="utf-8",
-    )
     print(json.dumps(result, indent=2))
     return 0 if result["ok"] else 1
 
