@@ -18,6 +18,7 @@ Current working capabilities include:
 - stable source IDs, editing, ordering and provenance-qualified evidence;
 - safe local UTF-8 text and Markdown import;
 - a version-stable Local Source Import page that creates saved investigations;
+- deterministic no-network public-reference metadata capture;
 - transcript collection, cleaning and source-pack generation;
 - deterministic and replaceable structured finding providers;
 - human review of evidence-linked findings;
@@ -52,8 +53,11 @@ Every reusable card and reviewed report is derived only from accepted findings t
 python -m ytis.app
 ```
 
+Open `/start` for the focused onboarding page. It links to the four primary paths while preserving every specialist route in the sidebar.
+
 Useful routes:
 
+- `/start` — choose the demo, local import, full workbench or card library;
 - `/technical-research` — full source-pack, review, card and report workbench;
 - `/local-source-import` — import a local `.txt`, `.md` or `.markdown` path, analyze it and save the investigation;
 - `/insight-cards` — inspect persisted cards and advisory exact relationships;
