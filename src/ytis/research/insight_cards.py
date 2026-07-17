@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -15,6 +16,10 @@ def _required(value: str, field_name: str) -> str:
     if not text:
         raise ValueError(f"{field_name} is required")
     return text
+
+
+def normalize_card_claim(value: str) -> str:
+    return re.sub(r"\s+", " ", _required(value, "claim").lower())
 
 
 @dataclass(frozen=True)
@@ -75,6 +80,47 @@ class InsightCard:
             evidence_ids=tuple(evidence_ids), confidence=float(confidence),
             action=payload["action"], review_status=payload["review_status"],
         )
+
+
+@dataclass(frozen=True)
+class RelatedCardPair:
+    card_ids: tuple[str, str]
+    reasons: tuple[str, ...]
+    shared_evidence_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if len(self.card_ids) != 2 or self.card_ids[0] >= self.card_ids[1]:
+            raise ValueError("related card IDs must be a sorted unique pair")
+        allowed = {"same-normalized-claim", "shared-evidence"}
+        if not self.reasons or any(reason not in allowed for reason in self.reasons):
+            raise ValueError("related card reasons are invalid")
+        if len(self.reasons) != len(set(self.reasons)):
+            raise ValueError("related card reasons must be unique")
+
+
+def find_related_cards(cards: list[InsightCard] | tuple[InsightCard, ...]) -> tuple[RelatedCardPair, ...]:
+    card_ids = [card.card_id for card in cards]
+    if len(card_ids) != len(set(card_ids)):
+        raise ValueError("card IDs must be unique")
+    ordered = sorted(cards, key=lambda card: card.card_id)
+    relations: list[RelatedCardPair] = []
+    for left_index, left in enumerate(ordered):
+        for right in ordered[left_index + 1 :]:
+            reasons: list[str] = []
+            if normalize_card_claim(left.claim) == normalize_card_claim(right.claim):
+                reasons.append("same-normalized-claim")
+            shared = tuple(sorted(set(left.evidence_ids) & set(right.evidence_ids)))
+            if shared:
+                reasons.append("shared-evidence")
+            if reasons:
+                relations.append(
+                    RelatedCardPair(
+                        card_ids=(left.card_id, right.card_id),
+                        reasons=tuple(reasons),
+                        shared_evidence_ids=shared,
+                    )
+                )
+    return tuple(relations)
 
 
 def create_insight_card(
@@ -141,3 +187,6 @@ class JsonInsightCardRepository:
         if not self.root.exists():
             return []
         return sorted(path.stem for path in self.root.glob("*.json"))
+
+    def list_cards(self) -> list[InsightCard]:
+        return [self.load(card_id) for card_id in self.list_ids()]
