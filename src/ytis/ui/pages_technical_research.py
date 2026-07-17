@@ -14,7 +14,9 @@ from ytis.research import (
     SourceDocument,
     TechnicalResearchService,
     create_insight_card,
+    edit_source,
     find_duplicate_sources,
+    move_source,
     write_reviewed_report,
 )
 from ytis.research.models import Investigation
@@ -83,6 +85,7 @@ def render_technical_research(
     reports_root = root / "reports"
     current: dict[str, Investigation | None] = {"value": None}
     source_pack: list[SourceDocument] = []
+    editing_source_id: dict[str, str | None] = {"value": None}
 
     with ui.column().classes("ytis-page gap-4"):
         with ui.row().classes("w-full justify-between items-start gap-3 ytis-toolbar-row"):
@@ -114,7 +117,7 @@ def render_technical_research(
 
         with ui.card().classes("ytis-card p-4 w-full"):
             ui.label("2. Build the source pack").classes("text-xl font-bold")
-            ui.label("Add one or more public-safe sources. IDs are assigned in insertion order.").classes("text-sm text-slate-400")
+            ui.label("Add, edit, and reorder public-safe sources. Source IDs remain stable.").classes("text-sm text-slate-400")
             with ui.grid(columns=2).classes("w-full gap-3"):
                 source_title = ui.input("Source title", value="Public-safe technical note").classes("w-full").props("data-testid=source-title")
                 source_type = ui.select(
@@ -135,30 +138,38 @@ def render_technical_research(
                     "The next step should add structured evidence-linked findings and reports."
                 ),
             ).classes("w-full").props("rows=6 data-testid=source-text")
+            edit_status = ui.label("Adding a new source.").classes("text-xs text-slate-500").props(
+                "data-testid=source-edit-status"
+            )
 
             def clear_draft() -> None:
+                editing_source_id["value"] = None
                 source_title.value = ""
                 source_type.value = "technical-note"
                 source_origin.value = "manual-workbench-entry"
                 source_text.value = ""
+                edit_status.set_text("Adding a new source.")
+                save_source_button.set_text("Add source")
+                save_source_button.props("icon=add")
 
             with ui.row().classes("gap-2"):
-                add_source_button = ui.button("Add source", icon="add", color="primary").props("data-testid=add-source")
+                save_source_button = ui.button("Add source", icon="add", color="primary").props("data-testid=add-source")
                 ui.button("Clear draft", icon="clear", on_click=clear_draft).props("outline data-testid=clear-source-draft")
             ui.separator()
             ui.label("Staged sources").classes("text-sm font-bold")
             source_pack_container.move()
             duplicate_container.move()
 
-        def renumber_sources() -> None:
-            for index, source in enumerate(list(source_pack), start=1):
-                source_pack[index - 1] = SourceDocument(
-                    source_id=f"source-{index:03d}",
-                    title=source.title,
-                    content=source.content,
-                    source_type=source.source_type,
-                    origin=source.origin,
-                )
+        def next_source_id() -> str:
+            used: set[int] = set()
+            for source in source_pack:
+                prefix, separator, suffix = source.source_id.rpartition("-")
+                if separator and prefix == "source" and suffix.isdigit():
+                    used.add(int(suffix))
+            candidate = 1
+            while candidate in used:
+                candidate += 1
+            return f"source-{candidate:03d}"
 
         def render_duplicate_warnings() -> None:
             duplicate_container.clear()
@@ -177,6 +188,16 @@ def render_technical_research(
                         ui.label(
                             f"Group {index}: {', '.join(group.source_ids)} · fingerprint {group.fingerprint[:12]}…"
                         ).classes("text-sm text-slate-300").props(f"data-testid=duplicate-group-{index}")
+
+        def begin_edit(source: SourceDocument) -> None:
+            editing_source_id["value"] = source.source_id
+            source_title.value = source.title
+            source_type.value = source.source_type
+            source_origin.value = source.origin
+            source_text.value = source.content
+            edit_status.set_text(f"Editing {source.source_id}; its ID and position will be preserved.")
+            save_source_button.set_text("Update source")
+            save_source_button.props("icon=save")
 
         def render_source_pack() -> None:
             source_pack_container.clear()
@@ -198,14 +219,40 @@ def render_technical_research(
                                         )
                                     ui.label(source.content).classes("text-sm text-slate-400 line-clamp-2")
 
-                                def remove_source(*, position: int = index - 1) -> None:
-                                    source_pack.pop(position)
-                                    renumber_sources()
-                                    render_source_pack()
+                                with ui.row().classes("gap-1"):
+                                    def move_up(*, source_id: str = source.source_id, position: int = index - 1) -> None:
+                                        if position == 0:
+                                            return
+                                        source_pack[:] = move_source(tuple(source_pack), source_id=source_id, target_index=position - 1)
+                                        render_source_pack()
 
-                                ui.button("Remove", icon="delete", on_click=remove_source).props(
-                                    f"flat dense color=negative data-testid=remove-source-{index}"
-                                )
+                                    def move_down(*, source_id: str = source.source_id, position: int = index - 1) -> None:
+                                        if position >= len(source_pack) - 1:
+                                            return
+                                        source_pack[:] = move_source(tuple(source_pack), source_id=source_id, target_index=position + 1)
+                                        render_source_pack()
+
+                                    def edit_current(*, selected: SourceDocument = source) -> None:
+                                        begin_edit(selected)
+
+                                    def remove_source(*, source_id: str = source.source_id) -> None:
+                                        source_pack[:] = [item for item in source_pack if item.source_id != source_id]
+                                        if editing_source_id["value"] == source_id:
+                                            clear_draft()
+                                        render_source_pack()
+
+                                    ui.button(icon="arrow_upward", on_click=move_up).props(
+                                        f"flat dense {'disable' if index == 1 else ''} data-testid=move-source-up-{index}"
+                                    ).tooltip("Move up")
+                                    ui.button(icon="arrow_downward", on_click=move_down).props(
+                                        f"flat dense {'disable' if index == len(source_pack) else ''} data-testid=move-source-down-{index}"
+                                    ).tooltip("Move down")
+                                    ui.button(icon="edit", on_click=edit_current).props(
+                                        f"flat dense data-testid=edit-source-{index}"
+                                    ).tooltip("Edit source")
+                                    ui.button(icon="delete", on_click=remove_source).props(
+                                        f"flat dense color=negative data-testid=remove-source-{index}"
+                                    ).tooltip("Remove source")
             render_duplicate_warnings()
 
         def draft_source(source_id: str) -> SourceDocument:
@@ -217,17 +264,30 @@ def render_technical_research(
                 origin=str(source_origin.value or ""),
             )
 
-        def add_source() -> None:
+        def save_source() -> None:
             try:
-                source = draft_source(f"source-{len(source_pack) + 1:03d}")
-                source_pack.append(source)
+                selected_id = editing_source_id["value"]
+                if selected_id is None:
+                    source = draft_source(next_source_id())
+                    source_pack.append(source)
+                    message = f"Added {source.source_id}"
+                else:
+                    source_pack[:] = edit_source(
+                        tuple(source_pack),
+                        source_id=selected_id,
+                        title=str(source_title.value or ""),
+                        content=str(source_text.value or ""),
+                        source_type=str(source_type.value or "technical-note"),
+                        origin=str(source_origin.value or ""),
+                    )
+                    message = f"Updated {selected_id}"
                 render_source_pack()
                 clear_draft()
-                ui.notify(f"Added {source.source_id}", type="positive")
+                ui.notify(message, type="positive")
             except Exception as exc:
                 ui.notify(str(exc), type="negative")
 
-        add_source_button.on_click(add_source)
+        save_source_button.on_click(save_source)
         render_source_pack()
 
         status = ui.label("No investigation loaded.").classes("text-sm text-slate-400")
