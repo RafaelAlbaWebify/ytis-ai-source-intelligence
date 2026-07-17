@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from ytis.research import (
+    InsightCard,
     JsonInsightCardRepository,
     SourceDocument,
     TechnicalResearchService,
@@ -60,6 +61,12 @@ def main() -> int:
     path = repository.save(card)
     loaded = repository.load(card.card_id)
 
+    unsafe_card = create_insight_card(
+        investigation,
+        finding_id=accepted.finding_id,
+        action="Do something",
+        card_id="../escape",
+    )
     checks = {
         "accepted_finding_converted": card.finding_id == accepted.finding_id,
         "claim_preserved": card.claim == accepted.summary,
@@ -79,21 +86,18 @@ def main() -> int:
             "unknown finding",
         ),
         "duplicate_save_rejected": expect_value_error(lambda: repository.save(card), "already exists"),
-        "unsafe_id_rejected": expect_value_error(
-            lambda: create_insight_card(
-                investigation,
-                finding_id=accepted.finding_id,
-                action="Do something",
-                card_id="../escape",
-            ) and repository.save(
-                create_insight_card(
-                    investigation,
-                    finding_id=accepted.finding_id,
-                    action="Do something",
-                    card_id="../escape",
-                )
+        "unsafe_id_rejected": expect_value_error(lambda: repository.save(unsafe_card), "unsafe characters"),
+        "boolean_confidence_rejected": expect_value_error(
+            lambda: InsightCard(
+                card_id="bad-confidence",
+                investigation_id="investigation",
+                finding_id="finding",
+                claim="Claim",
+                evidence_ids=("source:e001",),
+                confidence=True,
+                action="Act",
             ),
-            "unsafe characters",
+            "confidence must be numeric",
         ),
     }
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -107,6 +111,19 @@ def main() -> int:
         "action",
         "review_status",
     }
+
+    corrupt_path = store / "corrupt.json"
+    corrupt_path.write_text("{not-json", encoding="utf-8")
+    checks["corrupt_json_rejected"] = expect_value_error(
+        lambda: repository.load("corrupt"), "invalid insight card JSON"
+    )
+    mismatch_path = store / "mismatch.json"
+    mismatch_payload = card.to_dict()
+    mismatch_payload["card_id"] = "different"
+    mismatch_path.write_text(json.dumps(mismatch_payload), encoding="utf-8")
+    checks["filename_payload_mismatch_rejected"] = expect_value_error(
+        lambda: repository.load("mismatch"), "filename does not match"
+    )
 
     report = {"ok": all(checks.values()), "checks": checks, "card": card.to_dict()}
     OUT.mkdir(parents=True, exist_ok=True)
