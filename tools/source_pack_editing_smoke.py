@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,8 +71,8 @@ def main() -> int:
         "edit_does_not_mutate_input": original[1].title == "Role note" and original[1].origin == "fixture-b",
         "move_changes_order_only": [source.source_id for source in moved]
         == ["source-003", "source-001", "source-002"],
-        "move_preserves_objects": {source.source_id: source.to_dict() if hasattr(source, "to_dict") else source.content for source in moved}
-        == {source.source_id: source.to_dict() if hasattr(source, "to_dict") else source.content for source in edited},
+        "move_preserves_all_fields": {source.source_id: asdict(source) for source in moved}
+        == {source.source_id: asdict(source) for source in edited},
         "move_to_same_position_stable": unchanged_move == moved,
         "unknown_edit_rejected": expect_value_error(
             lambda: edit_source(original, source_id="missing", title="Missing"),
