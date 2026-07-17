@@ -3,7 +3,14 @@ from ytis.research.configuration import (
     ResearchProviderSettings,
     build_finding_provider,
 )
-from ytis.research.insight_cards import InsightCard, JsonInsightCardRepository, create_insight_card
+from ytis.research.insight_cards import (
+    InsightCard,
+    JsonInsightCardRepository,
+    RelatedCardPair,
+    create_insight_card,
+    find_related_cards,
+    normalize_card_claim,
+)
 from ytis.research.local_import import (
     DEFAULT_MAX_SOURCE_BYTES,
     SUPPORTED_LOCAL_SOURCE_SUFFIXES,
@@ -69,6 +76,7 @@ __all__ = [
     "ProviderTelemetryBreakdown",
     "ProviderTelemetrySummary",
     "REPORT_TEMPLATES",
+    "RelatedCardPair",
     "ReportTemplate",
     "ResearchProviderSettings",
     "ReviewDecision",
@@ -87,8 +95,10 @@ __all__ = [
     "create_insight_card",
     "edit_source",
     "find_duplicate_sources",
+    "find_related_cards",
     "import_local_source",
     "move_source",
+    "normalize_card_claim",
     "normalize_source_content",
     "render_reviewed_report",
     "source_fingerprint",
