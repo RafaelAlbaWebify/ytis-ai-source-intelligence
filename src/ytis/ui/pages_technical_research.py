@@ -7,7 +7,16 @@ from typing import Any
 from nicegui import ui
 
 from ytis.core.paths import project_root
-from ytis.research import JsonInvestigationRepository, SourceDocument, TechnicalResearchService
+from ytis.research import (
+    REPORT_TEMPLATES,
+    JsonInsightCardRepository,
+    JsonInvestigationRepository,
+    SourceDocument,
+    TechnicalResearchService,
+    create_insight_card,
+    find_duplicate_sources,
+    write_reviewed_report,
+)
 from ytis.research.models import Investigation
 from ytis.ui.layout import NAV_GROUPS, NAV_ITEMS, render_shell
 from ytis.ui.state import AppState
@@ -22,6 +31,13 @@ _SOURCE_TYPE_OPTIONS = {
     "job-description": "Job description",
     "transcript": "Transcript",
     "text": "Generic text",
+}
+_REPORT_TEMPLATE_OPTIONS = {
+    "source-credibility": "Source credibility and provenance",
+    "business-model": "Business model extraction",
+    "technical-lessons": "Technical lessons",
+    "learning-roadmap": "Learning roadmap",
+    "opportunity-analysis": "Opportunity analysis",
 }
 
 
@@ -62,6 +78,7 @@ def render_technical_research(
     render_shell(state, _ROUTE)
     root = _storage_root()
     repository = JsonInvestigationRepository(root / "investigations")
+    card_repository = JsonInsightCardRepository(root / "insight_cards")
     active_service = service or TechnicalResearchService()
     reports_root = root / "reports"
     current: dict[str, Investigation | None] = {"value": None}
@@ -93,6 +110,7 @@ def render_technical_research(
             ).classes("w-full").props("data-testid=research-question")
 
         source_pack_container = ui.column().classes("w-full gap-2")
+        duplicate_container = ui.column().classes("w-full gap-2")
 
         with ui.card().classes("ytis-card p-4 w-full"):
             ui.label("2. Build the source pack").classes("text-xl font-bold")
@@ -130,6 +148,7 @@ def render_technical_research(
             ui.separator()
             ui.label("Staged sources").classes("text-sm font-bold")
             source_pack_container.move()
+            duplicate_container.move()
 
         def renumber_sources() -> None:
             for index, source in enumerate(list(source_pack), start=1):
@@ -141,34 +160,53 @@ def render_technical_research(
                     origin=source.origin,
                 )
 
+        def render_duplicate_warnings() -> None:
+            duplicate_container.clear()
+            groups = find_duplicate_sources(source_pack)
+            if not groups:
+                return
+            with duplicate_container:
+                with ui.card().classes("ytis-mini-card p-3 w-full border-amber-500/40").props(
+                    "data-testid=duplicate-warning"
+                ):
+                    ui.label("Possible duplicate sources detected").classes("font-bold text-amber-300")
+                    ui.label(
+                        "Duplicates are advisory only. YTIS has not removed, merged, or rejected any source."
+                    ).classes("text-sm text-slate-400")
+                    for index, group in enumerate(groups, start=1):
+                        ui.label(
+                            f"Group {index}: {', '.join(group.source_ids)} · fingerprint {group.fingerprint[:12]}…"
+                        ).classes("text-sm text-slate-300").props(f"data-testid=duplicate-group-{index}")
+
         def render_source_pack() -> None:
             source_pack_container.clear()
             with source_pack_container:
                 if not source_pack:
                     ui.label("No sources staged.").classes("text-sm text-slate-500").props("data-testid=source-pack-empty")
-                    return
-                for index, source in enumerate(source_pack, start=1):
-                    with ui.card().classes("ytis-card p-3 w-full").props(f"data-testid=source-pack-item-{index}"):
-                        with ui.row().classes("w-full justify-between items-start gap-3"):
-                            with ui.column().classes("gap-1 flex-1"):
-                                ui.label(f"{source.source_id} · {source.title}").classes("font-bold").props(
-                                    f"data-testid=source-pack-title-{index}"
-                                )
-                                with ui.row().classes("gap-2"):
-                                    ui.badge(source.source_type).props(f"outline data-testid=source-pack-type-{index}")
-                                    ui.label(source.origin).classes("text-xs text-slate-500").props(
-                                        f"data-testid=source-pack-origin-{index}"
+                else:
+                    for index, source in enumerate(source_pack, start=1):
+                        with ui.card().classes("ytis-card p-3 w-full").props(f"data-testid=source-pack-item-{index}"):
+                            with ui.row().classes("w-full justify-between items-start gap-3"):
+                                with ui.column().classes("gap-1 flex-1"):
+                                    ui.label(f"{source.source_id} · {source.title}").classes("font-bold").props(
+                                        f"data-testid=source-pack-title-{index}"
                                     )
-                                ui.label(source.content).classes("text-sm text-slate-400 line-clamp-2")
+                                    with ui.row().classes("gap-2"):
+                                        ui.badge(source.source_type).props(f"outline data-testid=source-pack-type-{index}")
+                                        ui.label(source.origin).classes("text-xs text-slate-500").props(
+                                            f"data-testid=source-pack-origin-{index}"
+                                        )
+                                    ui.label(source.content).classes("text-sm text-slate-400 line-clamp-2")
 
-                            def remove_source(*, position: int = index - 1) -> None:
-                                source_pack.pop(position)
-                                renumber_sources()
-                                render_source_pack()
+                                def remove_source(*, position: int = index - 1) -> None:
+                                    source_pack.pop(position)
+                                    renumber_sources()
+                                    render_source_pack()
 
-                            ui.button("Remove", icon="delete", on_click=remove_source).props(
-                                f"flat dense color=negative data-testid=remove-source-{index}"
-                            )
+                                ui.button("Remove", icon="delete", on_click=remove_source).props(
+                                    f"flat dense color=negative data-testid=remove-source-{index}"
+                                )
+            render_duplicate_warnings()
 
         def draft_source(source_id: str) -> SourceDocument:
             return SourceDocument(
@@ -251,6 +289,35 @@ def render_technical_research(
                                     f"{evidence.evidence_id} · {evidence.source_id} · chars {evidence.start_offset}-{evidence.end_offset}"
                                 ).classes("text-xs text-blue-300")
                                 ui.label(evidence.text).classes("text-sm text-slate-300")
+
+                        action_input = ui.input(
+                            "Action for reusable insight card",
+                            value="Preserve this accepted evidence in the next decision or implementation step.",
+                        ).classes("w-full").props(f"data-testid=card-action-{index}")
+
+                        def save_card(
+                            *,
+                            finding_id: str = finding.finding_id,
+                            action_field: Any = action_input,
+                        ) -> None:
+                            active = current["value"]
+                            if active is None:
+                                ui.notify("Run or reopen an investigation first", type="warning")
+                                return
+                            try:
+                                card = create_insight_card(
+                                    active,
+                                    finding_id=finding_id,
+                                    action=str(action_field.value or ""),
+                                )
+                                path = card_repository.save(card)
+                                ui.notify(f"Saved insight card {path.name}", type="positive")
+                            except Exception as exc:
+                                ui.notify(str(exc), type="negative")
+
+                        ui.button("Save insight card", icon="bookmark_add", on_click=save_card).props(
+                            f"outline data-testid=save-card-{index}"
+                        )
             update_status()
 
         def analyze() -> None:
@@ -293,6 +360,21 @@ def render_technical_research(
             except Exception as exc:
                 ui.notify(str(exc), type="negative")
 
+        def export_reviewed_template() -> None:
+            investigation = current["value"]
+            if investigation is None:
+                ui.notify("Run or reopen an investigation first", type="warning")
+                return
+            try:
+                template = str(report_template.value or "").strip()
+                if template not in REPORT_TEMPLATES:
+                    raise ValueError("Choose a supported reviewed report template")
+                output = reports_root / investigation.investigation_id / "reviewed"
+                path = write_reviewed_report(investigation, template, output)
+                ui.notify(f"Exported reviewed template {path.name}", type="positive")
+            except Exception as exc:
+                ui.notify(str(exc), type="negative")
+
         def reopen() -> None:
             selected = str(saved_select.value or "").strip()
             if not selected:
@@ -319,6 +401,17 @@ def render_technical_research(
                 ui.button("Analyze source pack", icon="science", on_click=analyze, color="primary").props("data-testid=analyze-source")
                 ui.button("Save investigation", icon="save", on_click=save).props("outline data-testid=save-investigation")
                 ui.button("Export approved report", icon="download", on_click=export).props("outline data-testid=export-report")
+            with ui.row().classes("w-full gap-2 items-end ytis-toolbar-row"):
+                report_template = ui.select(
+                    _REPORT_TEMPLATE_OPTIONS,
+                    value="technical-lessons",
+                    label="Reviewed report template",
+                ).classes("min-w-[320px]").props("data-testid=report-template")
+                ui.button(
+                    "Export reviewed template",
+                    icon="description",
+                    on_click=export_reviewed_template,
+                ).props("outline data-testid=export-reviewed-report")
 
         render_findings()
 
