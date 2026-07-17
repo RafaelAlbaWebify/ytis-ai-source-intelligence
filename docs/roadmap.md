@@ -39,6 +39,7 @@ Completed:
 - First-class technical-note, pasted-text, article-notes, document-notes, job-description and transcript categories.
 - Descriptive source origin/reference metadata.
 - Advisory exact duplicate-source detection.
+- Non-destructive duplicate warnings in the workbench.
 
 Remaining:
 
@@ -60,11 +61,13 @@ Completed:
 - Accepted-finding to card conversion.
 - Evidence-to-card provenance.
 - Atomic local card persistence and duplicate-save protection.
+- Workbench controls for accepted-finding card creation.
+- Browser proof that pending findings cannot create cards.
 
 Remaining:
 
-- Workbench controls for card creation.
 - Related-card handling beyond exact duplicate IDs.
+- Representative reusable-card examples.
 
 ## M4 - Report generation
 
@@ -81,10 +84,11 @@ Completed:
 - Technical-lessons template.
 - Learning-roadmap template.
 - Opportunity-analysis template.
+- Workbench template selector and reviewed-template export controls.
+- Browser proof that pending findings remain excluded from reviewed reports.
 
 Remaining:
 
-- Workbench template selector and export controls.
 - Representative portfolio examples for every template.
 
 ## M5 - Validation and UI polish
@@ -99,6 +103,7 @@ Completed:
 - Retained screenshots, traces, logs and structured evidence artifacts.
 - Focused `/demo` route and dedicated Playwright journey.
 - Combined roadmap integration proof.
+- Reusable-output workbench browser journey covering duplicates, cards, and reviewed reports.
 
 Remaining:
 
