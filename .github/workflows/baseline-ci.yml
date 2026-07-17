@@ -122,6 +122,11 @@ jobs:
           PYTHONPATH: src
         run: python tools/source_pack_editing_smoke.py
 
+      - name: Run safe local source import proof
+        env:
+          PYTHONPATH: src
+        run: python tools/local_source_import_smoke.py
+
       - name: Run combined roadmap integration proof
         env:
           PYTHONPATH: src
