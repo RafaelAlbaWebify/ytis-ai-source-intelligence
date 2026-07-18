@@ -226,5 +226,6 @@ def install_trace_visual_system() -> None:
             html body .ytis-operational-header { flex-direction: column; }
         }
         </style>
-        """
+        """,
+        shared=True,
     )
