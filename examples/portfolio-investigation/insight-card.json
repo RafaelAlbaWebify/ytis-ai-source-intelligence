@@ -1,0 +1,10 @@
+{
+  "card_id": "portfolio-architecture-review--finding-004",
+  "investigation_id": "portfolio-architecture-review",
+  "finding_id": "finding-004",
+  "claim": "Source-qualified evidence should be retained in cards and reports.",
+  "evidence_ids": ["source-002:e002"],
+  "confidence": 0.97,
+  "action": "Require every reusable card and reviewed report to retain source-qualified evidence IDs.",
+  "review_status": "accepted"
+}

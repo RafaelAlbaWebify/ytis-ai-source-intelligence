@@ -7,13 +7,40 @@ from typing import Any
 from nicegui import ui
 
 from ytis.core.paths import project_root
-from ytis.research import JsonInvestigationRepository, SourceDocument, TechnicalResearchService
+from ytis.research import (
+    REPORT_TEMPLATES,
+    JsonInsightCardRepository,
+    JsonInvestigationRepository,
+    SourceDocument,
+    TechnicalResearchService,
+    create_insight_card,
+    edit_source,
+    find_duplicate_sources,
+    move_source,
+    write_reviewed_report,
+)
 from ytis.research.models import Investigation
 from ytis.ui.layout import NAV_GROUPS, NAV_ITEMS, render_shell
 from ytis.ui.state import AppState
 
 _ROUTE = "/technical-research"
 _NAV_ITEM = ("Technical Research", _ROUTE, "science")
+_SOURCE_TYPE_OPTIONS = {
+    "technical-note": "Technical note",
+    "pasted-text": "Pasted text",
+    "article-notes": "Article notes",
+    "document-notes": "Document notes",
+    "job-description": "Job description",
+    "transcript": "Transcript",
+    "text": "Generic text",
+}
+_REPORT_TEMPLATE_OPTIONS = {
+    "source-credibility": "Source credibility and provenance",
+    "business-model": "Business model extraction",
+    "technical-lessons": "Technical lessons",
+    "learning-roadmap": "Learning roadmap",
+    "opportunity-analysis": "Opportunity analysis",
+}
 
 
 def _storage_root() -> Path:
@@ -53,10 +80,12 @@ def render_technical_research(
     render_shell(state, _ROUTE)
     root = _storage_root()
     repository = JsonInvestigationRepository(root / "investigations")
+    card_repository = JsonInsightCardRepository(root / "insight_cards")
     active_service = service or TechnicalResearchService()
     reports_root = root / "reports"
     current: dict[str, Investigation | None] = {"value": None}
     source_pack: list[SourceDocument] = []
+    editing_source_id: dict[str, str | None] = {"value": None}
 
     with ui.column().classes("ytis-page gap-4"):
         with ui.row().classes("w-full justify-between items-start gap-3 ytis-toolbar-row"):
@@ -84,11 +113,22 @@ def render_technical_research(
             ).classes("w-full").props("data-testid=research-question")
 
         source_pack_container = ui.column().classes("w-full gap-2")
+        duplicate_container = ui.column().classes("w-full gap-2")
 
         with ui.card().classes("ytis-card p-4 w-full"):
             ui.label("2. Build the source pack").classes("text-xl font-bold")
-            ui.label("Add one or more public-safe sources. IDs are assigned in insertion order.").classes("text-sm text-slate-400")
-            source_title = ui.input("Source title", value="Public-safe technical note").classes("w-full").props("data-testid=source-title")
+            ui.label("Add, edit, and reorder public-safe sources. Source IDs remain stable.").classes("text-sm text-slate-400")
+            with ui.grid(columns=2).classes("w-full gap-3"):
+                source_title = ui.input("Source title", value="Public-safe technical note").classes("w-full").props("data-testid=source-title")
+                source_type = ui.select(
+                    _SOURCE_TYPE_OPTIONS,
+                    value="technical-note",
+                    label="Source type",
+                ).classes("w-full").props("data-testid=source-type")
+            source_origin = ui.input(
+                "Origin or reference",
+                value="manual-workbench-entry",
+            ).classes("w-full").props("data-testid=source-origin")
             source_text = ui.textarea(
                 "Source text",
                 value=(
@@ -98,66 +138,156 @@ def render_technical_research(
                     "The next step should add structured evidence-linked findings and reports."
                 ),
             ).classes("w-full").props("rows=6 data-testid=source-text")
+            edit_status = ui.label("Adding a new source.").classes("text-xs text-slate-500").props(
+                "data-testid=source-edit-status"
+            )
+
+            def clear_draft() -> None:
+                editing_source_id["value"] = None
+                source_title.value = ""
+                source_type.value = "technical-note"
+                source_origin.value = "manual-workbench-entry"
+                source_text.value = ""
+                edit_status.set_text("Adding a new source.")
+                save_source_button.set_text("Add source")
+                save_source_button.props("icon=add")
+
             with ui.row().classes("gap-2"):
-                add_source_button = ui.button("Add source", icon="add", color="primary").props("data-testid=add-source")
-                ui.button(
-                    "Clear draft",
-                    icon="clear",
-                    on_click=lambda: (setattr(source_title, "value", ""), setattr(source_text, "value", "")),
-                ).props("outline data-testid=clear-source-draft")
+                save_source_button = ui.button("Add source", icon="add", color="primary").props("data-testid=add-source")
+                ui.button("Clear draft", icon="clear", on_click=clear_draft).props("outline data-testid=clear-source-draft")
             ui.separator()
             ui.label("Staged sources").classes("text-sm font-bold")
             source_pack_container.move()
+            duplicate_container.move()
 
-        def renumber_sources() -> None:
-            for index, source in enumerate(list(source_pack), start=1):
-                source_pack[index - 1] = SourceDocument(
-                    source_id=f"source-{index:03d}",
-                    title=source.title,
-                    content=source.content,
-                    source_type=source.source_type,
-                    origin=source.origin,
-                )
+        def next_source_id() -> str:
+            used: set[int] = set()
+            for source in source_pack:
+                prefix, separator, suffix = source.source_id.rpartition("-")
+                if separator and prefix == "source" and suffix.isdigit():
+                    used.add(int(suffix))
+            candidate = 1
+            while candidate in used:
+                candidate += 1
+            return f"source-{candidate:03d}"
+
+        def render_duplicate_warnings() -> None:
+            duplicate_container.clear()
+            groups = find_duplicate_sources(source_pack)
+            if not groups:
+                return
+            with duplicate_container:
+                with ui.card().classes("ytis-mini-card p-3 w-full border-amber-500/40").props(
+                    "data-testid=duplicate-warning"
+                ):
+                    ui.label("Possible duplicate sources detected").classes("font-bold text-amber-300")
+                    ui.label(
+                        "Duplicates are advisory only. YTIS has not removed, merged, or rejected any source."
+                    ).classes("text-sm text-slate-400")
+                    for index, group in enumerate(groups, start=1):
+                        ui.label(
+                            f"Group {index}: {', '.join(group.source_ids)} · fingerprint {group.fingerprint[:12]}…"
+                        ).classes("text-sm text-slate-300").props(f"data-testid=duplicate-group-{index}")
+
+        def begin_edit(source: SourceDocument) -> None:
+            editing_source_id["value"] = source.source_id
+            source_title.value = source.title
+            source_type.value = source.source_type
+            source_origin.value = source.origin
+            source_text.value = source.content
+            edit_status.set_text(f"Editing {source.source_id}; its ID and position will be preserved.")
+            save_source_button.set_text("Update source")
+            save_source_button.props("icon=save")
 
         def render_source_pack() -> None:
             source_pack_container.clear()
             with source_pack_container:
                 if not source_pack:
                     ui.label("No sources staged.").classes("text-sm text-slate-500").props("data-testid=source-pack-empty")
-                    return
-                for index, source in enumerate(source_pack, start=1):
-                    with ui.card().classes("ytis-card p-3 w-full").props(f"data-testid=source-pack-item-{index}"):
-                        with ui.row().classes("w-full justify-between items-start gap-3"):
-                            with ui.column().classes("gap-0 flex-1"):
-                                ui.label(f"{source.source_id} · {source.title}").classes("font-bold").props(
-                                    f"data-testid=source-pack-title-{index}"
-                                )
-                                ui.label(source.content).classes("text-sm text-slate-400 line-clamp-2")
-                            def remove_source(*, position: int = index - 1) -> None:
-                                source_pack.pop(position)
-                                renumber_sources()
-                                render_source_pack()
-                            ui.button("Remove", icon="delete", on_click=remove_source).props(
-                                f"flat dense color=negative data-testid=remove-source-{index}"
-                            )
+                else:
+                    for index, source in enumerate(source_pack, start=1):
+                        with ui.card().classes("ytis-card p-3 w-full").props(f"data-testid=source-pack-item-{index}"):
+                            with ui.row().classes("w-full justify-between items-start gap-3"):
+                                with ui.column().classes("gap-1 flex-1"):
+                                    ui.label(f"{source.source_id} · {source.title}").classes("font-bold").props(
+                                        f"data-testid=source-pack-title-{index}"
+                                    )
+                                    with ui.row().classes("gap-2"):
+                                        ui.badge(source.source_type).props(f"outline data-testid=source-pack-type-{index}")
+                                        ui.label(source.origin).classes("text-xs text-slate-500").props(
+                                            f"data-testid=source-pack-origin-{index}"
+                                        )
+                                    ui.label(source.content).classes("text-sm text-slate-400 line-clamp-2")
 
-        def add_source() -> None:
+                                with ui.row().classes("gap-1"):
+                                    def move_up(*, source_id: str = source.source_id, position: int = index - 1) -> None:
+                                        if position == 0:
+                                            return
+                                        source_pack[:] = move_source(tuple(source_pack), source_id=source_id, target_index=position - 1)
+                                        render_source_pack()
+
+                                    def move_down(*, source_id: str = source.source_id, position: int = index - 1) -> None:
+                                        if position >= len(source_pack) - 1:
+                                            return
+                                        source_pack[:] = move_source(tuple(source_pack), source_id=source_id, target_index=position + 1)
+                                        render_source_pack()
+
+                                    def edit_current(*, selected: SourceDocument = source) -> None:
+                                        begin_edit(selected)
+
+                                    def remove_source(*, source_id: str = source.source_id) -> None:
+                                        source_pack[:] = [item for item in source_pack if item.source_id != source_id]
+                                        if editing_source_id["value"] == source_id:
+                                            clear_draft()
+                                        render_source_pack()
+
+                                    ui.button(icon="arrow_upward", on_click=move_up).props(
+                                        f"flat dense {'disable' if index == 1 else ''} data-testid=move-source-up-{index}"
+                                    ).tooltip("Move up")
+                                    ui.button(icon="arrow_downward", on_click=move_down).props(
+                                        f"flat dense {'disable' if index == len(source_pack) else ''} data-testid=move-source-down-{index}"
+                                    ).tooltip("Move down")
+                                    ui.button(icon="edit", on_click=edit_current).props(
+                                        f"flat dense data-testid=edit-source-{index}"
+                                    ).tooltip("Edit source")
+                                    ui.button(icon="delete", on_click=remove_source).props(
+                                        f"flat dense color=negative data-testid=remove-source-{index}"
+                                    ).tooltip("Remove source")
+            render_duplicate_warnings()
+
+        def draft_source(source_id: str) -> SourceDocument:
+            return SourceDocument(
+                source_id=source_id,
+                title=str(source_title.value or ""),
+                content=str(source_text.value or ""),
+                source_type=str(source_type.value or "technical-note"),
+                origin=str(source_origin.value or ""),
+            )
+
+        def save_source() -> None:
             try:
-                source = SourceDocument(
-                    source_id=f"source-{len(source_pack) + 1:03d}",
-                    title=str(source_title.value or ""),
-                    content=str(source_text.value or ""),
-                    origin="technical-research-workbench",
-                )
-                source_pack.append(source)
+                selected_id = editing_source_id["value"]
+                if selected_id is None:
+                    source = draft_source(next_source_id())
+                    source_pack.append(source)
+                    message = f"Added {source.source_id}"
+                else:
+                    source_pack[:] = edit_source(
+                        tuple(source_pack),
+                        source_id=selected_id,
+                        title=str(source_title.value or ""),
+                        content=str(source_text.value or ""),
+                        source_type=str(source_type.value or "technical-note"),
+                        origin=str(source_origin.value or ""),
+                    )
+                    message = f"Updated {selected_id}"
                 render_source_pack()
-                source_title.value = ""
-                source_text.value = ""
-                ui.notify(f"Added {source.source_id}", type="positive")
+                clear_draft()
+                ui.notify(message, type="positive")
             except Exception as exc:
                 ui.notify(str(exc), type="negative")
 
-        add_source_button.on_click(add_source)
+        save_source_button.on_click(save_source)
         render_source_pack()
 
         status = ui.label("No investigation loaded.").classes("text-sm text-slate-400")
@@ -205,6 +335,7 @@ def render_technical_research(
                                     active_service.review_finding(active, finding_id=finding_id, status=review_status)
                                     badge.set_text(review_status)
                                     update_status()
+
                                 ui.button("Accept", icon="check", on_click=lambda _e, fn=set_review: fn("accepted")).props(
                                     f"outline dense data-testid=accept-{index}"
                                 )
@@ -218,20 +349,40 @@ def render_technical_research(
                                     f"{evidence.evidence_id} · {evidence.source_id} · chars {evidence.start_offset}-{evidence.end_offset}"
                                 ).classes("text-xs text-blue-300")
                                 ui.label(evidence.text).classes("text-sm text-slate-300")
+
+                        action_input = ui.input(
+                            "Action for reusable insight card",
+                            value="Preserve this accepted evidence in the next decision or implementation step.",
+                        ).classes("w-full").props(f"data-testid=card-action-{index}")
+
+                        def save_card(
+                            *,
+                            finding_id: str = finding.finding_id,
+                            action_field: Any = action_input,
+                        ) -> None:
+                            active = current["value"]
+                            if active is None:
+                                ui.notify("Run or reopen an investigation first", type="warning")
+                                return
+                            try:
+                                card = create_insight_card(
+                                    active,
+                                    finding_id=finding_id,
+                                    action=str(action_field.value or ""),
+                                )
+                                path = card_repository.save(card)
+                                ui.notify(f"Saved insight card {path.name}", type="positive")
+                            except Exception as exc:
+                                ui.notify(str(exc), type="negative")
+
+                        ui.button("Save insight card", icon="bookmark_add", on_click=save_card).props(
+                            f"outline data-testid=save-card-{index}"
+                        )
             update_status()
 
         def analyze() -> None:
             try:
-                sources = list(source_pack)
-                if not sources:
-                    sources = [
-                        SourceDocument(
-                            source_id="source-001",
-                            title=str(source_title.value or ""),
-                            content=str(source_text.value or ""),
-                            origin="technical-research-workbench",
-                        )
-                    ]
+                sources = list(source_pack) or [draft_source("source-001")]
                 current["value"] = active_service.create_investigation(
                     investigation_id=str(investigation_id.value or ""),
                     title=str(title.value or ""),
@@ -269,6 +420,21 @@ def render_technical_research(
             except Exception as exc:
                 ui.notify(str(exc), type="negative")
 
+        def export_reviewed_template() -> None:
+            investigation = current["value"]
+            if investigation is None:
+                ui.notify("Run or reopen an investigation first", type="warning")
+                return
+            try:
+                template = str(report_template.value or "").strip()
+                if template not in REPORT_TEMPLATES:
+                    raise ValueError("Choose a supported reviewed report template")
+                output = reports_root / investigation.investigation_id / "reviewed"
+                path = write_reviewed_report(investigation, template, output)
+                ui.notify(f"Exported reviewed template {path.name}", type="positive")
+            except Exception as exc:
+                ui.notify(str(exc), type="negative")
+
         def reopen() -> None:
             selected = str(saved_select.value or "").strip()
             if not selected:
@@ -283,8 +449,7 @@ def render_technical_research(
                 source_pack.clear()
                 source_pack.extend(investigation.sources)
                 render_source_pack()
-                source_title.value = ""
-                source_text.value = ""
+                clear_draft()
                 render_findings()
                 ui.notify(f"Reopened {selected}", type="positive")
             except Exception as exc:
@@ -296,6 +461,17 @@ def render_technical_research(
                 ui.button("Analyze source pack", icon="science", on_click=analyze, color="primary").props("data-testid=analyze-source")
                 ui.button("Save investigation", icon="save", on_click=save).props("outline data-testid=save-investigation")
                 ui.button("Export approved report", icon="download", on_click=export).props("outline data-testid=export-report")
+            with ui.row().classes("w-full gap-2 items-end ytis-toolbar-row"):
+                report_template = ui.select(
+                    _REPORT_TEMPLATE_OPTIONS,
+                    value="technical-lessons",
+                    label="Reviewed report template",
+                ).classes("min-w-[320px]").props("data-testid=report-template")
+                ui.button(
+                    "Export reviewed template",
+                    icon="description",
+                    on_click=export_reviewed_template,
+                ).props("outline data-testid=export-reviewed-report")
 
         render_findings()
 

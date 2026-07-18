@@ -1,0 +1,41 @@
+name: Playwright Source Pack Editing
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-pack-editing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run source pack editing journey
+        env:
+          PYTHONPATH: src
+        run: python tools/playwright_source_pack_editing.py
+
+      - name: Upload source pack editing evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-pack-editing-evidence
+          path: artifacts/source-pack-editing-workbench/
+          if-no-files-found: warn
+          retention-days: 14

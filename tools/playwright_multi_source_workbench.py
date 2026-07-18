@@ -18,6 +18,8 @@ OUT = ROOT / "artifacts" / "multi-source-workbench"
 BASE_URL = os.environ.get("YTIS_BASE_URL", "http://127.0.0.1:8080")
 SOURCE_ONE_FACT = "The collector supports offline evidence packaging."
 SOURCE_TWO_FACT = "A major risk is loss of provenance during manual consolidation."
+SOURCE_ONE_ORIGIN = "https://example.test/article/collector"
+SOURCE_TWO_ORIGIN = "job-description-fixture-2026"
 
 
 def wait_for_server(timeout_seconds: int = 60) -> None:
@@ -45,6 +47,11 @@ def stop_process(process: subprocess.Popen[str]) -> None:
         process.wait(timeout=10)
     except Exception:
         process.kill()
+
+
+def select_source_type(page: Any, label: str) -> None:
+    page.get_by_test_id("source-type").click()
+    page.get_by_text(label, exact=True).last.click()
 
 
 def main() -> int:
@@ -100,12 +107,16 @@ def main() -> int:
             page.get_by_test_id("investigation-id").fill("multi-source-proof-001")
             page.get_by_test_id("investigation-title").fill("Multi-source provenance proof")
 
-            page.get_by_test_id("source-title").fill("Collector capability note")
+            page.get_by_test_id("source-title").fill("Collector capability article")
+            select_source_type(page, "Article notes")
+            page.get_by_test_id("source-origin").fill(SOURCE_ONE_ORIGIN)
             page.get_by_test_id("source-text").fill(SOURCE_ONE_FACT)
             page.get_by_test_id("add-source").click()
             page.get_by_test_id("source-pack-item-1").wait_for(state="visible")
 
-            page.get_by_test_id("source-title").fill("Consolidation risk note")
+            page.get_by_test_id("source-title").fill("Consolidation role requirement")
+            select_source_type(page, "Job description")
+            page.get_by_test_id("source-origin").fill(SOURCE_TWO_ORIGIN)
             page.get_by_test_id("source-text").fill(SOURCE_TWO_FACT)
             page.get_by_test_id("add-source").click()
             page.get_by_test_id("source-pack-item-2").wait_for(state="visible")
@@ -113,6 +124,14 @@ def main() -> int:
             report["checks"]["stable_source_ids_visible"] = (
                 "source-001" in page.get_by_test_id("source-pack-title-1").inner_text()
                 and "source-002" in page.get_by_test_id("source-pack-title-2").inner_text()
+            )
+            report["checks"]["source_types_visible"] = (
+                page.get_by_test_id("source-pack-type-1").inner_text().strip() == "article-notes"
+                and page.get_by_test_id("source-pack-type-2").inner_text().strip() == "job-description"
+            )
+            report["checks"]["source_origins_visible"] = (
+                SOURCE_ONE_ORIGIN in page.get_by_test_id("source-pack-origin-1").inner_text()
+                and SOURCE_TWO_ORIGIN in page.get_by_test_id("source-pack-origin-2").inner_text()
             )
 
             page.get_by_test_id("analyze-source").click()
@@ -135,6 +154,10 @@ def main() -> int:
             page.get_by_test_id("reopen-investigation").click()
             page.get_by_test_id("source-pack-item-2").wait_for(state="visible", timeout=10_000)
             report["checks"]["reopen_restored_two_sources"] = page.locator("[data-testid^='source-pack-item-']").count() == 2
+            report["checks"]["reopen_restored_types"] = (
+                page.get_by_test_id("source-pack-type-1").inner_text().strip() == "article-notes"
+                and page.get_by_test_id("source-pack-type-2").inner_text().strip() == "job-description"
+            )
 
             page.screenshot(path=str(screenshot_path), full_page=True)
             context.tracing.stop(path=str(trace_path))
@@ -152,17 +175,23 @@ def main() -> int:
         report["checks"].update(
             {
                 "two_sources_persisted": [source.source_id for source in investigation.sources] == ["source-001", "source-002"],
-                "source_titles_persisted": [source.title for source in investigation.sources]
-                == ["Collector capability note", "Consolidation risk note"],
+                "source_types_persisted": [source.source_type for source in investigation.sources]
+                == ["article-notes", "job-description"],
+                "source_origins_persisted": [source.origin for source in investigation.sources]
+                == [SOURCE_ONE_ORIGIN, SOURCE_TWO_ORIGIN],
                 "evidence_spans_both_sources": {item.source_id for item in investigation.evidence}
                 == {"source-001", "source-002"},
                 "reviews_persisted": all(
                     investigation.review_status(finding.finding_id) == "accepted"
                     for finding in investigation.findings
                 ),
+                "markdown_contains_source_register": "## Source register" in markdown,
+                "markdown_contains_types": "`article-notes`" in markdown and "`job-description`" in markdown,
+                "markdown_contains_origins": SOURCE_ONE_ORIGIN in markdown and SOURCE_TWO_ORIGIN in markdown,
                 "markdown_contains_both_facts": SOURCE_ONE_FACT in markdown and SOURCE_TWO_FACT in markdown,
                 "markdown_contains_both_source_ids": "source-001:e001" in markdown and "source-002:e001" in markdown,
-                "json_contains_two_sources": len(payload.get("sources", [])) == 2,
+                "json_contains_typed_sources": [source.get("source_type") for source in payload.get("sources", [])]
+                == ["article-notes", "job-description"],
                 "no_console_errors": not console_errors,
                 "no_page_errors": not page_errors,
                 "no_server_errors": not server_errors,
