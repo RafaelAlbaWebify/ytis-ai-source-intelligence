@@ -14,7 +14,8 @@ def install_trace_visual_system() -> None:
     ui.add_head_html(
         """
         <style id="ytis-trace-visual-system">
-        :root {
+        :root,
+        html body {
             --ytis-bg: #f6f8fb;
             --ytis-surface: #ffffff;
             --ytis-surface-soft: #f7f9fc;
