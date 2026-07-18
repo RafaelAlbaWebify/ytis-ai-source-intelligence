@@ -1,10 +1,6 @@
 # YTIS - Your Technical Intelligence System
 
-YTIS is my local-first AI source intelligence workbench for AI Developer / GenAI Application Developer portfolio work.
-
-I built YTIS as my AIDE flagship:
-
-- AIDE -> YTIS -> AI Developer / GenAI Application Developer
+YTIS is a local-first AI source intelligence workbench for applied AI and GenAI application portfolio work.
 
 The goal is not to replace ChatGPT or to build a black-box AI product. YTIS is the local control layer around source material, evidence extraction, provider workflows, human review, saved investigations, reusable insight cards and reviewed report generation.
 
@@ -12,7 +8,7 @@ The goal is not to replace ChatGPT or to build a black-box AI product. YTIS is t
 
 YTIS turns public-safe source material into structured learning and decision-support outputs.
 
-Current working capabilities include:
+Current capabilities include:
 
 - typed multi-source investigation packs;
 - stable source IDs, editing, ordering and provenance-qualified evidence;
@@ -83,7 +79,7 @@ YTIS is not the reasoning model. ChatGPT or another explicitly configured provid
 
 ## Safety boundaries
 
-YTIS is for public-safe research and learning workflows. It does not access restricted content, does not process private customer data, does not automatically accept findings, and does not present AI output as certain fact. Human review is always required.
+YTIS is for public-safe research and learning workflows. It does not access restricted content, process private customer data, automatically accept findings or present AI output as certain fact. Human review is always required.
 
 See `docs/safety-boundaries.md` for the full boundary model.
 
@@ -97,22 +93,14 @@ See `docs/public-demo.md` for the expected result and automated browser evidence
 
 `examples/portfolio-investigation/` contains committed source files, a complete reviewed investigation, a reusable insight card and representative outputs for all five report templates. The Windows/Linux baseline validates grounding, exact source offsets, card linkage, report evidence coverage and the human-review boundary.
 
-## Full workflow
-
-A typical end-to-end workflow is documented in `docs/sample-workflow.md`.
-
 ## Verification
 
-The current cross-platform CI baseline and its explicit limits are documented in `docs/ci-baseline.md`. Browser workflows retain screenshots, traces, server logs and structured JSON check reports.
+The cross-platform CI baseline and its explicit limits are documented in `docs/ci-baseline.md`. Browser workflows retain screenshots, traces, server logs and structured JSON check reports.
 
 When GitHub-hosted runners are unavailable, `scripts/Run-YTIS-Release-Validation.ps1` runs the exact baseline commands and all browser journeys on a clean Windows checkout, then creates one evidence ZIP directly in Downloads. See `docs/local-release-validation.md`. This fallback supports diagnosis and visual review but does not replace the final Windows/Linux CI gate.
 
-The final merge and publication gate is documented in `docs/publication-review.md`.
+## Release status
 
-## Current status
+YTIS `v1.0.0` is the first public portfolio release. It is a completed local-first portfolio MVP, not a mature autonomous AI platform or a replacement for human research judgment.
 
-YTIS is a working local portfolio MVP. It is private-first and should not be treated as a mature autonomous AI platform.
-
-## Roadmap
-
-See `docs/roadmap.md`.
+See `docs/roadmap.md` for possible future development.
