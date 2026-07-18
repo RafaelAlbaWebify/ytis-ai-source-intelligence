@@ -12,6 +12,8 @@ REQUIRED_FILES = (
     "docs/safety-boundaries.md",
     "docs/public-demo.md",
     "docs/publication-review.md",
+    "docs/visual-system.md",
+    "src/ytis/ui/trace_visual_system.py",
     "src/ytis/ui/pages_start_here.py",
     "examples/portfolio-investigation/README.md",
     "examples/portfolio-investigation/investigation.json",
@@ -47,6 +49,9 @@ def main() -> int:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     review = (ROOT / "docs" / "publication-review.md").read_text(encoding="utf-8")
     safety = (ROOT / "docs" / "safety-boundaries.md").read_text(encoding="utf-8")
+    visual = (ROOT / "docs" / "visual-system.md").read_text(encoding="utf-8")
+    theme = (ROOT / "src" / "ytis" / "ui" / "trace_visual_system.py").read_text(encoding="utf-8")
+    start_proof = (ROOT / "tools" / "playwright_start_here.py").read_text(encoding="utf-8")
 
     forbidden_tracked_names = {".env", "credentials.json", "secrets.json", "token.json"}
     forbidden_present = [
@@ -64,6 +69,12 @@ def main() -> int:
         "publication_review_blocks_steps_none": "steps: None" in review,
         "publication_review_requires_same_commit_screenshots": "same commit that is merged" in review,
         "safety_boundary_exists": bool(safety.strip()),
+        "visual_contract_names_trace": "TRACE operational interface" in visual,
+        "visual_contract_rejects_neon": "neon glow" in visual,
+        "theme_uses_light_canvas": "#f6f8fb" in theme,
+        "theme_uses_trace_navy": "#071a33" in theme and "#0b2342" in theme,
+        "browser_checks_visual_contract": "light_operational_canvas" in start_proof
+        and "trace_navy_sidebar" in start_proof,
         "no_obvious_secret_files": not forbidden_present,
     }
     result = {
