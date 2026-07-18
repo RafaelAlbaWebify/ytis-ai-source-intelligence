@@ -47,6 +47,18 @@ source pack
 
 Every reusable card and reviewed report is derived only from accepted findings that retain exact source-qualified evidence IDs.
 
+## Operational interface
+
+YTIS follows the maintained TRACE operational visual system rather than a dark neon AI-dashboard style:
+
+- light grey canvas and white operational panels;
+- fixed TRACE navy sidebar;
+- restrained blue, green, amber and red state colours;
+- compact KPI rows, registers, forms and status badges;
+- thin borders, modest radii and minimal decoration.
+
+See `docs/visual-system.md` for the enforced visual contract and explicit non-goals.
+
 ## Run locally
 
 ```bash
