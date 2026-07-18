@@ -57,40 +57,67 @@ def render_local_source_import(state: AppState) -> None:
     repository = JsonInvestigationRepository(root / "investigations")
     service = TechnicalResearchService()
 
-    with ui.column().classes("ytis-page gap-4"):
-        ui.label("Local Source Import").classes("text-3xl font-bold")
-        ui.label(
-            "Import one local UTF-8 text or Markdown file through the hardened source boundary, analyze it deterministically, and save the investigation for reopening in the main workbench."
-        ).classes("text-sm text-slate-400")
+    with ui.column().classes("ytis-page gap-5"):
+        with ui.element("section").classes("ytis-operational-header w-full"):
+            with ui.column().classes("gap-1"):
+                ui.label("Source ingestion").classes("text-xs font-bold text-blue-400 uppercase tracking-wide")
+                ui.label("Local Source Import").classes("ytis-page-title")
+                ui.label(
+                    "Validate one local UTF-8 text or Markdown file, generate grounded findings, and save a reopenable investigation."
+                ).classes("text-sm text-slate-400")
+            ui.button(
+                "Open research workbench",
+                icon="science",
+                on_click=lambda: ui.navigate.to("/technical-research"),
+            ).props("outline no-caps")
 
-        with ui.card().classes("ytis-card p-4 w-full"):
-            ui.label("File and source metadata").classes("text-xl font-bold")
-            path_input = ui.input("Local file path").classes("w-full").props("data-testid=local-import-path")
-            with ui.grid(columns=2).classes("w-full gap-3"):
-                source_id = ui.input("Source ID", value="source-001").classes("w-full").props(
-                    "data-testid=local-import-source-id"
-                )
-                source_type = ui.select(
-                    _SOURCE_TYPE_OPTIONS,
-                    value="document-notes",
-                    label="Source type",
-                ).classes("w-full").props("data-testid=local-import-source-type")
-            source_title = ui.input("Source title (optional)").classes("w-full").props(
-                "data-testid=local-import-source-title"
-            )
+        with ui.element("section").classes("ytis-kpi-row"):
+            for label, value, detail in (
+                ("Supported formats", "3", ".txt · .md · .markdown"),
+                ("Encoding", "UTF-8", "Invalid text is rejected"),
+                ("Execution", "Local", "No network source fetching"),
+                ("Review state", "Pending", "No automatic acceptance"),
+            ):
+                with ui.element("article").classes("ytis-kpi-card"):
+                    ui.label(label).classes("ytis-kpi-label")
+                    ui.label(value).classes("ytis-kpi-value")
+                    ui.label(detail).classes("text-xs text-slate-500 mt-2")
 
-        with ui.card().classes("ytis-card p-4 w-full"):
-            ui.label("Investigation metadata").classes("text-xl font-bold")
-            investigation_id = ui.input("Investigation ID", value="local-import-001").classes("w-full").props(
-                "data-testid=local-import-investigation-id"
-            )
-            investigation_title = ui.input("Investigation title", value="Imported local source").classes(
-                "w-full"
-            ).props("data-testid=local-import-investigation-title")
-            question = ui.input(
-                "Research question",
-                value="What capabilities, constraints, risks, and recommendations are stated?",
-            ).classes("w-full").props("data-testid=local-import-question")
+        with ui.card().classes("ytis-card p-0 w-full"):
+            with ui.row().classes("w-full justify-between items-start px-5 pt-5 pb-3"):
+                with ui.column().classes("gap-1"):
+                    ui.label("Import configuration").classes("text-lg font-bold")
+                    ui.label("File identity and investigation metadata remain explicit and reviewable.").classes(
+                        "text-sm text-slate-400"
+                    )
+                ui.badge("Local-only", color="green").props("outline")
+            ui.separator()
+            with ui.column().classes("w-full gap-4 p-5"):
+                path_input = ui.input("Local file path").classes("w-full").props("data-testid=local-import-path")
+                with ui.grid(columns=3).classes("w-full gap-3"):
+                    source_id = ui.input("Source ID", value="source-001").classes("w-full").props(
+                        "data-testid=local-import-source-id"
+                    )
+                    source_type = ui.select(
+                        _SOURCE_TYPE_OPTIONS,
+                        value="document-notes",
+                        label="Source type",
+                    ).classes("w-full").props("data-testid=local-import-source-type")
+                    source_title = ui.input("Source title (optional)").classes("w-full").props(
+                        "data-testid=local-import-source-title"
+                    )
+                ui.separator()
+                with ui.grid(columns=2).classes("w-full gap-3"):
+                    investigation_id = ui.input("Investigation ID", value="local-import-001").classes("w-full").props(
+                        "data-testid=local-import-investigation-id"
+                    )
+                    investigation_title = ui.input("Investigation title", value="Imported local source").classes(
+                        "w-full"
+                    ).props("data-testid=local-import-investigation-title")
+                question = ui.input(
+                    "Research question",
+                    value="What capabilities, constraints, risks, and recommendations are stated?",
+                ).classes("w-full").props("data-testid=local-import-question")
 
         result = ui.column().classes("w-full gap-2")
 
@@ -112,13 +139,17 @@ def render_local_source_import(state: AppState) -> None:
                 result.clear()
                 with result:
                     with ui.card().classes("ytis-card p-4 w-full").props("data-testid=local-import-result"):
-                        ui.label(f"Saved {investigation.investigation_id}").classes("text-lg font-bold text-green-300")
-                        ui.label(f"Source: {source.source_id} · {source.title}").classes("text-sm")
-                        ui.label(f"Type: {source.source_type}").classes("text-sm")
+                        with ui.row().classes("w-full justify-between items-start"):
+                            with ui.column().classes("gap-1"):
+                                ui.label(f"Saved {investigation.investigation_id}").classes("text-lg font-bold text-green-300")
+                                ui.label(f"{source.source_id} · {source.title}").classes("text-sm")
+                            ui.badge("Pending review", color="orange").props("outline")
+                        ui.separator()
+                        with ui.grid(columns=3).classes("w-full gap-3"):
+                            ui.label(f"Type: {source.source_type}").classes("text-sm")
+                            ui.label(f"Evidence: {len(investigation.evidence)}").classes("text-sm")
+                            ui.label(f"Findings: {len(investigation.findings)}").classes("text-sm")
                         ui.label(f"Origin: {source.origin}").classes("text-xs text-slate-400")
-                        ui.label(
-                            f"{len(investigation.evidence)} evidence units · {len(investigation.findings)} pending findings"
-                        ).classes("text-sm text-slate-300")
                         ui.label(f"Saved to {saved_path}").classes("text-xs text-slate-500")
                         ui.link("Open Technical Research Workbench", "/technical-research").props(
                             "data-testid=open-technical-research"
@@ -127,10 +158,11 @@ def render_local_source_import(state: AppState) -> None:
             except Exception as exc:
                 ui.notify(str(exc), type="negative")
 
-        ui.button("Import, analyze, and save", icon="upload_file", on_click=import_and_save, color="primary").props(
-            "data-testid=run-local-import"
-        )
-        ui.label(
-            "Supported files: .txt, .md, and .markdown. The importer rejects missing files, directories, unsupported extensions, invalid UTF-8, oversized files, path escapes, and direct symlinks."
-        ).classes("text-xs text-slate-500")
+        with ui.row().classes("w-full justify-between items-center gap-3"):
+            ui.label(
+                "The importer rejects missing files, directories, unsupported extensions, invalid UTF-8, oversized files, path escapes, and direct symlinks."
+            ).classes("text-xs text-slate-500 max-w-3xl")
+            ui.button("Import, analyze, and save", icon="upload_file", on_click=import_and_save, color="primary").props(
+                "no-caps data-testid=run-local-import"
+            )
         result.move()
