@@ -89,7 +89,7 @@ def main() -> int:
 
             checks = {
                 "route_ok": bool(response and response.status < 500),
-                "title_visible": page.get_by_text("Start Here", exact=True).is_visible(),
+                "title_visible": page.locator(".ytis-page-title", has_text="Start Here").is_visible(),
                 "demo_entry": page.get_by_test_id("start-demo").is_visible(),
                 "import_entry": page.get_by_test_id("start-import").is_visible(),
                 "workbench_entry": page.get_by_test_id("start-workbench").is_visible(),
