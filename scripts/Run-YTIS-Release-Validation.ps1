@@ -57,7 +57,7 @@ try {
 } catch [Microsoft.PowerShell.Commands.WriteErrorException] {
     throw
 } catch {
-    # Get-NetTCPConnection is not available on every Windows edition. The browser tests will report a port conflict if present.
+    # Get-NetTCPConnection is not available on every Windows edition. Browser tests report any real conflict.
 }
 
 $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
@@ -66,6 +66,7 @@ $venvRoot = Join-Path $tempRoot 'venv'
 $runRoot = Join-Path $tempRoot 'review'
 $logsRoot = Join-Path $runRoot 'logs'
 $evidenceRoot = Join-Path $runRoot 'artifacts'
+$repoArtifacts = Join-Path $repoRoot 'artifacts'
 New-Item -ItemType Directory -Force -Path $logsRoot, $evidenceRoot | Out-Null
 
 $downloads = Join-Path $env:USERPROFILE 'Downloads'
@@ -73,6 +74,32 @@ if (-not (Test-Path $downloads)) {
     New-Item -ItemType Directory -Force -Path $downloads | Out-Null
 }
 $zipPath = Join-Path $downloads "YTIS_RELEASE_VALIDATION_${stamp}_${commit.Substring(0, 8)}.zip"
+
+$baselineCommands = @(
+    'baseline_audit.py',
+    'characterize_architecture.py',
+    'deterministic_source_pack_smoke.py',
+    'technical_research_smoke.py',
+    'technical_research_repository_smoke.py',
+    'research_provider_contract_smoke.py',
+    'structured_json_provider_smoke.py',
+    'research_provider_configuration_smoke.py',
+    'research_provider_telemetry_smoke.py',
+    'research_telemetry_store_smoke.py',
+    'research_telemetry_configuration_smoke.py',
+    'research_telemetry_summary_smoke.py',
+    'research_source_types_report_smoke.py',
+    'public_reference_metadata_smoke.py',
+    'research_insight_cards_smoke.py',
+    'related_insight_cards_smoke.py',
+    'reviewed_report_templates_smoke.py',
+    'duplicate_source_detection_smoke.py',
+    'source_pack_editing_smoke.py',
+    'local_source_import_smoke.py',
+    'roadmap_integration_smoke.py',
+    'portfolio_example_smoke.py',
+    'publication_readiness_smoke.py'
+)
 
 $summary = [ordered]@{
     project = 'YTIS - AI Source Intelligence'
@@ -83,8 +110,9 @@ $summary = [ordered]@{
     python = $null
     dependency_install_skipped = [bool]$SkipDependencyInstall
     browser_validation_skipped = [bool]$SkipBrowser
-    smoke_tests = @()
+    baseline_tests = @()
     browser_tests = @()
+    workspace_clean_after = $false
     passed = $false
 }
 
@@ -116,26 +144,28 @@ try {
     $env:PYTHONPATH = Join-Path $repoRoot 'src'
     $env:PYTHONUNBUFFERED = '1'
 
-    $repoArtifacts = Join-Path $repoRoot 'artifacts'
     if (Test-Path $repoArtifacts) {
         Remove-Item -Recurse -Force $repoArtifacts
     }
     New-Item -ItemType Directory -Force -Path $repoArtifacts | Out-Null
 
-    $smokeTests = Get-ChildItem -Path (Join-Path $repoRoot 'tools') -File -Filter '*_smoke.py' |
-        Sort-Object Name
-    foreach ($test in $smokeTests) {
-        $logPath = Join-Path $logsRoot ("smoke_{0}.log" -f $test.BaseName)
-        Write-Step "Smoke proof: $($test.Name)"
+    foreach ($fileName in $baselineCommands) {
+        $testPath = Join-Path (Join-Path $repoRoot 'tools') $fileName
+        if (-not (Test-Path $testPath)) {
+            throw "Required baseline command is missing: tools/$fileName"
+        }
+        $baseName = [IO.Path]::GetFileNameWithoutExtension($fileName)
+        $logPath = Join-Path $logsRoot ("baseline_{0}.log" -f $baseName)
+        Write-Step "Baseline proof: $fileName"
         Push-Location $repoRoot
         try {
-            & $python $test.FullName *>&1 | Tee-Object -FilePath $logPath
+            & $python $testPath *>&1 | Tee-Object -FilePath $logPath
             $exitCode = $LASTEXITCODE
         } finally {
             Pop-Location
         }
-        $summary.smoke_tests += [ordered]@{
-            name = $test.Name
+        $summary.baseline_tests += [ordered]@{
+            name = $fileName
             exit_code = $exitCode
             passed = ($exitCode -eq 0)
             log = "logs/$([IO.Path]::GetFileName($logPath))"
@@ -166,15 +196,20 @@ try {
 
     if (Test-Path $repoArtifacts) {
         Copy-Item -Path (Join-Path $repoArtifacts '*') -Destination $evidenceRoot -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force $repoArtifacts
     }
 
-    $smokePassed = @($summary.smoke_tests | Where-Object { -not $_.passed }).Count -eq 0
+    $baselinePassed = @($summary.baseline_tests | Where-Object { -not $_.passed }).Count -eq 0
     $browserPassed = $SkipBrowser -or (@($summary.browser_tests | Where-Object { -not $_.passed }).Count -eq 0)
-    $summary.passed = $smokePassed -and $browserPassed
+    $afterStatus = @(& git -C $repoRoot status --porcelain --untracked-files=all)
+    $summary.workspace_clean_after = $afterStatus.Count -eq 0
+    $summary.passed = $baselinePassed -and $browserPassed -and $summary.workspace_clean_after
 
     $summaryPath = Join-Path $runRoot 'release-validation.json'
     $summary | ConvertTo-Json -Depth 8 | Set-Content -Path $summaryPath -Encoding UTF8
 
+    $baselinePassCount = @($summary.baseline_tests | Where-Object { $_.passed }).Count
+    $browserPassCount = @($summary.browser_tests | Where-Object { $_.passed }).Count
     $readme = @"
 # YTIS local release-validation evidence
 
@@ -182,13 +217,14 @@ try {
 - Commit: `$commit`
 - Generated: $($summary.generated_at)
 - Python: $($summary.python)
-- Smoke proofs passed: $(@($summary.smoke_tests | Where-Object passed).Count) / $($summary.smoke_tests.Count)
-- Browser journeys passed: $(@($summary.browser_tests | Where-Object passed).Count) / $($summary.browser_tests.Count)
+- Baseline proofs passed: $baselinePassCount / $($summary.baseline_tests.Count)
+- Browser journeys passed: $browserPassCount / $($summary.browser_tests.Count)
+- Repository clean after validation: $($summary.workspace_clean_after)
 - Overall result: $(if ($summary.passed) { 'PASS' } else { 'FAIL' })
 
 The `artifacts` directory contains screenshots, traces, server logs and structured reports produced by the repository's own validation tools. The `logs` directory contains one console log per proof.
 
-This package validates the exact commit above. It does not modify, commit, merge, pull or switch the repository.
+This package validates the exact commit above. It does not commit, merge, pull, switch branches or overwrite source files.
 "@
     Set-Content -Path (Join-Path $runRoot 'README.md') -Value $readme -Encoding UTF8
 
@@ -203,5 +239,6 @@ This package validates the exact commit above. It does not modify, commit, merge
         exit 1
     }
 } finally {
+    Remove-Item -Recurse -Force $repoArtifacts -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $tempRoot -ErrorAction SilentlyContinue
 }
