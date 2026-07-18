@@ -37,9 +37,9 @@ REQUIRED_WORKFLOWS = (
     ".github/workflows/playwright-source-pack-editing.yml",
     ".github/workflows/playwright-reusable-outputs.yml",
     ".github/workflows/playwright-local-import-and-cards.yml",
-    ".github/workflows/playwright-structured-provider.yml",
+    ".github/workflows/playwright-structured-provider-workbench.yml",
     ".github/workflows/playwright-provider-configuration-guard.yml",
-    ".github/workflows/playwright-local-telemetry.yml",
+    ".github/workflows/playwright-local-telemetry-workbench.yml",
     ".github/workflows/playwright-public-demo.yml",
 )
 
