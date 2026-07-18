@@ -13,6 +13,8 @@ REQUIRED_FILES = (
     "docs/public-demo.md",
     "docs/publication-review.md",
     "docs/visual-system.md",
+    "docs/local-release-validation.md",
+    "scripts/Run-YTIS-Release-Validation.ps1",
     "src/ytis/ui/trace_visual_system.py",
     "src/ytis/ui/pages_start_here.py",
     "examples/portfolio-investigation/README.md",
@@ -52,6 +54,8 @@ def main() -> int:
     visual = (ROOT / "docs" / "visual-system.md").read_text(encoding="utf-8")
     theme = (ROOT / "src" / "ytis" / "ui" / "trace_visual_system.py").read_text(encoding="utf-8")
     start_proof = (ROOT / "tools" / "playwright_start_here.py").read_text(encoding="utf-8")
+    local_validation = (ROOT / "scripts" / "Run-YTIS-Release-Validation.ps1").read_text(encoding="utf-8")
+    local_validation_doc = (ROOT / "docs" / "local-release-validation.md").read_text(encoding="utf-8")
 
     forbidden_tracked_names = {".env", "credentials.json", "secrets.json", "token.json"}
     forbidden_present = [
@@ -75,6 +79,14 @@ def main() -> int:
         "theme_uses_trace_navy": "#071a33" in theme and "#0b2342" in theme,
         "browser_checks_visual_contract": "light_operational_canvas" in start_proof
         and "trace_navy_sidebar" in start_proof,
+        "local_validator_requires_clean_checkout": "status --porcelain --untracked-files=all" in local_validation,
+        "local_validator_uses_temporary_environment": "YTIS_RELEASE_VALIDATION_" in local_validation
+        and "$env:TEMP" in local_validation,
+        "local_validator_packages_to_downloads": "'Downloads'" in local_validation
+        and "Compress-Archive" in local_validation,
+        "local_validator_runs_exact_baseline": "baseline_audit.py" in local_validation
+        and "publication_readiness_smoke.py" in local_validation,
+        "local_validator_documented_as_fallback": "does not replace" in local_validation_doc,
         "no_obvious_secret_files": not forbidden_present,
     }
     result = {
