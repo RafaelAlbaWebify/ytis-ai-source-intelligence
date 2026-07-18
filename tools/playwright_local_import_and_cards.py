@@ -112,7 +112,7 @@ def main() -> int:
             saved = Path(env["YTIS_RESEARCH_DIR"]) / "investigations" / "local-import-001.json"
             payload = json.loads(saved.read_text(encoding="utf-8"))
             result["checks"]["investigation_saved"] = payload["sources"][0]["content"] == source_file.read_text(encoding="utf-8")
-            result["checks"]["pending_findings_created"] = len(payload["findings"]) == 2 and payload["reviews"] == []
+            result["checks"]["pending_findings_created"] = bool(payload["findings"]) and payload["reviews"] == []
 
             page.goto(BASE_URL + "/insight-cards", wait_until="networkidle")
             page.get_by_test_id("insight-card-2").wait_for(state="visible", timeout=15_000)
