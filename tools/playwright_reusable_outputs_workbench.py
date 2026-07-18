@@ -18,6 +18,7 @@ OUT = ROOT / "artifacts" / "reusable-outputs-workbench"
 BASE_URL = os.environ.get("YTIS_BASE_URL", "http://127.0.0.1:8080")
 DUPLICATE_FACT = "The platform supports evidence-linked local reports."
 ACTION = "Use this evidence when designing the next reporting iteration."
+FINDING_ID = "f001"
 
 
 def wait_for_server(timeout_seconds: int = 60) -> None:
@@ -125,7 +126,7 @@ def main() -> int:
 
             page.get_by_test_id("accept-1").click()
             page.get_by_test_id("save-card-1").click()
-            card_path = cards_dir / "reusable-output-proof--finding-001.json"
+            card_path = cards_dir / f"reusable-output-proof--{FINDING_ID}.json"
             deadline = time.time() + 10
             while time.time() < deadline and not card_path.exists():
                 time.sleep(0.1)
@@ -154,7 +155,7 @@ def main() -> int:
         report["checks"].update(
             {
                 "card_action_persisted": card_payload.get("action") == ACTION,
-                "card_finding_exact": card_payload.get("finding_id") == "finding-001",
+                "card_finding_exact": card_payload.get("finding_id") == FINDING_ID,
                 "card_evidence_exact": card_payload.get("evidence_ids") == ["source-001:e001"],
                 "reviewed_report_boundary": "Only human-accepted findings are included." in reviewed_markdown,
                 "reviewed_report_contains_accepted_fact": DUPLICATE_FACT in reviewed_markdown,
