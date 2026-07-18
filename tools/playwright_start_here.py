@@ -56,7 +56,7 @@ def main() -> int:
         text=True,
         start_new_session=os.name != "nt",
     )
-    report = {"ok": False, "checks": {}, "errors": []}
+    report = {"ok": False, "checks": {}, "visuals": {}, "errors": []}
     try:
         wait_for_server()
         from playwright.sync_api import sync_playwright
@@ -69,6 +69,24 @@ def main() -> int:
             page.on("console", lambda message: report["errors"].append(message.text) if message.type == "error" else None)
             page.on("pageerror", lambda error: report["errors"].append(str(error)))
             response = page.goto(f"{BASE_URL}/start", wait_until="networkidle", timeout=30_000)
+
+            body_background = page.locator("body").evaluate("element => getComputedStyle(element).backgroundColor")
+            sidebar_background = page.locator(".ytis-sidebar").evaluate(
+                "element => ({color: getComputedStyle(element).backgroundColor, image: getComputedStyle(element).backgroundImage})"
+            )
+            panel_background = page.locator(".ytis-card").first.evaluate(
+                "element => getComputedStyle(element).backgroundColor"
+            )
+            panel_radius = page.locator(".ytis-card").first.evaluate(
+                "element => getComputedStyle(element).borderRadius"
+            )
+            report["visuals"] = {
+                "body_background": body_background,
+                "sidebar_background": sidebar_background,
+                "panel_background": panel_background,
+                "panel_radius": panel_radius,
+            }
+
             checks = {
                 "route_ok": bool(response and response.status < 500),
                 "title_visible": page.get_by_text("Start Here", exact=True).is_visible(),
@@ -77,6 +95,11 @@ def main() -> int:
                 "workbench_entry": page.get_by_test_id("start-workbench").is_visible(),
                 "cards_entry": page.get_by_test_id("start-cards").is_visible(),
                 "review_boundary": page.get_by_test_id("start-review-boundary").is_visible(),
+                "light_operational_canvas": body_background == "rgb(246, 248, 251)",
+                "white_operational_panels": panel_background == "rgb(255, 255, 255)",
+                "trace_navy_sidebar": "linear-gradient" in sidebar_background["image"]
+                and ("7, 26, 51" in sidebar_background["image"] or "11, 35, 66" in sidebar_background["image"]),
+                "restrained_panel_radius": panel_radius in {"11px", "0.7rem"},
             }
             page.get_by_test_id("start-demo").click()
             page.wait_for_url("**/demo")
