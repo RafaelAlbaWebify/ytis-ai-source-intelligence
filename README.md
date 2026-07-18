@@ -105,6 +105,8 @@ A typical end-to-end workflow is documented in `docs/sample-workflow.md`.
 
 The current cross-platform CI baseline and its explicit limits are documented in `docs/ci-baseline.md`. Browser workflows retain screenshots, traces, server logs and structured JSON check reports.
 
+When GitHub-hosted runners are unavailable, `scripts/Run-YTIS-Release-Validation.ps1` runs the exact baseline commands and all browser journeys on a clean Windows checkout, then creates one evidence ZIP directly in Downloads. See `docs/local-release-validation.md`. This fallback supports diagnosis and visual review but does not replace the final Windows/Linux CI gate.
+
 The final merge and publication gate is documented in `docs/publication-review.md`.
 
 ## Current status
